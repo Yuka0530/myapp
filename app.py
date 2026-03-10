@@ -452,7 +452,7 @@ if file:
             servings_selected = st.selectbox(
                 "🍽 何人分作る？",
                 [1,2,3,4,5,6,8,10],
-                index=[1,2,3,4,5,6,8,10].index(servings) if servings in [1,2,3,4,5,6,8,10] else 1
+                index=[1,2,3,4,5,6,8,10].index(servings) if servings in [1,2,3,4,5,6,8,10] else 1,
                 key=f"servings_{url}"
             )
         
@@ -460,7 +460,7 @@ if file:
             multiplier = st.selectbox(
                 "🔢 分量倍率",
                 [0.5,0.75,1,1.25,1.5,2,3],
-                index=2   # 1倍
+                index=2,   # 1倍
                 key=f"multi_{url}"
             )
 
@@ -586,6 +586,7 @@ if file:
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
