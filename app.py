@@ -435,6 +435,10 @@ if file:
 
     total_kcal=0
 
+    selected_foods = {}
+    if "selected_foods" not in st.session_state:
+        st.session_state.selected_foods = {}
+
     for url in urls:
 
         if not url:
@@ -465,9 +469,7 @@ if file:
             )
 
         total_cal = 0
-        selected_foods = {}
-        if "selected_foods" not in st.session_state:
-            st.session_state.selected_foods = {}
+
 
         IGNORE_INGREDIENTS = ["水", "氷", "お湯", "熱湯"]
 
@@ -580,12 +582,13 @@ if file:
         st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
 
 
-        if st.button("📌 レシピとして追加"):
+        if st.button("📌 レシピとして追加, key=f"save_{url}"):
         
             for original, selected in st.session_state.selected_foods.items():
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
