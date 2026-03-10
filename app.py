@@ -582,12 +582,13 @@ if file:
         st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
 
 
-        if st.button("📌 レシピとして追加, key=f"save_{url}"):
+        if st.button("📌 レシピとして追加", key=f"save_{url}"):
         
             for original, selected in st.session_state.selected_foods.items():
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
