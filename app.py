@@ -7,6 +7,7 @@ import json
 import re
 from PIL import Image
 from bs4 import BeautifulSoup
+import numpy as np
 
 st.set_page_config(layout="wide")
 
@@ -113,19 +114,8 @@ if file:
 
     st.image(pil_img,width=400)
 
-    img = cv2.cvtColor(
-        cv2.imread(file.name) if False else cv2.cvtColor(
-            cv2.imread(file.name) if False else cv2.cvtColor(
-                cv2.imdecode(
-                    np.frombuffer(file.read(),np.uint8),
-                    cv2.IMREAD_COLOR
-                ),
-                cv2.COLOR_BGR2RGB
-            ),
-            cv2.COLOR_RGB2BGR
-        ),
-        cv2.COLOR_BGR2RGB
-    )
+    file_bytes = np.asarray(bytearray(file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
     st.header("①タイトル抽出")
 
@@ -196,6 +186,7 @@ if file:
 
     st.write(total_kcal,"kcal")
     
+
 
 
 
