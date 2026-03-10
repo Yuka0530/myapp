@@ -125,6 +125,7 @@ if file:
             cv2.COLOR_RGB2BGR
         ),
         cv2.COLOR_BGR2RGB
+    )
 
     st.header("①タイトル抽出")
 
@@ -195,4 +196,5 @@ if file:
 
     st.write(total_kcal,"kcal")
     )
+
 
