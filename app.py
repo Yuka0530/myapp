@@ -110,12 +110,12 @@ file = st.file_uploader("スクショアップ",type=["png","jpg","jpeg"])
 
 if file:
 
-    pil_img = Image.open(file)
+    pil_img = Image.open(file).convert("RGB")
 
     st.image(pil_img,width=400)
 
-    file_bytes = np.asarray(bytearray(file.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    img = np.array(pil_img)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     st.header("①タイトル抽出")
 
@@ -186,6 +186,7 @@ if file:
 
     st.write(total_kcal,"kcal")
     
+
 
 
 
