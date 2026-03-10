@@ -1,4 +1,3 @@
-pip install streamlit opencv-python pillow pytesseract requests beautifulsoup4 pandas
 
 import streamlit as st
 import cv2
@@ -196,3 +195,4 @@ if file:
 
     st.write(total_kcal,"kcal")
     )
+
