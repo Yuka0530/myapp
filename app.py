@@ -58,7 +58,7 @@ def search_recipe(name):
 
     query = f"site:delishkitchen.tv {name}"
 
-    url = f"https://www.bing.com/search?q={query}"
+    url = f"https://duckduckgo.com/html/?q={query}"
 
     headers={"User-Agent":"Mozilla/5.0"}
 
@@ -66,7 +66,7 @@ def search_recipe(name):
 
     soup = BeautifulSoup(r.text,"html.parser")
 
-    for a in soup.select("li.b_algo h2 a"):
+    for a in soup.select(".result__a"):
 
         link = a.get("href")
 
@@ -185,6 +185,7 @@ if file:
 
     st.write(total_kcal,"kcal")
     
+
 
 
 
