@@ -59,7 +59,7 @@ def search_recipe(name):
     query = f"site:delishkitchen.tv {name}"
 
     url = f"https://www.google.com/search?q={query}"
-    st.write("url:"url)
+    st.write("url:",url)
 
     headers={"User-Agent":"Mozilla/5.0"}
 
@@ -68,10 +68,10 @@ def search_recipe(name):
     soup = BeautifulSoup(r.text,"html.parser")
 
     for a in soup.select("a"):
-        st.write("a:"a)
+        st.write("a:",a)
 
         link = a.get("href","")
-        st.write("link:"link)
+        st.write("link:",link)
 
         if "delishkitchen.tv/recipes" in link:
 
@@ -189,6 +189,7 @@ if file:
 
     st.write(total_kcal,"kcal")
     
+
 
 
 
