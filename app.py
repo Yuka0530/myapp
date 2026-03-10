@@ -55,23 +55,27 @@ def read_title(img):
 ############################
 
 def search_recipe(name):
+    st.write(name)
 
-    query = f"site:delishkitchen.tv {name}"
+    query = requests.utils.quote(name)
 
-    url = f"https://duckduckgo.com/html/?q={query}"
+    url = f"https://delishkitchen.tv/search?q={query}"
 
-    headers={"User-Agent":"Mozilla/5.0"}
+    headers = {"User-Agent":"Mozilla/5.0"}
 
     r = requests.get(url,headers=headers)
 
     soup = BeautifulSoup(r.text,"html.parser")
 
-    for a in soup.select(".result__a"):
+    for a in soup.select("a"):
+        st.write("a:",a)
 
-        link = a.get("href")
+        link = a.get("href","")
+        st.write("link:",link)
 
-        if "delishkitchen.tv/recipes" in link:
-            return link
+        if "/recipes/" in link:
+
+            return "https://delishkitchen.tv" + link
 
     return None
 
@@ -185,6 +189,7 @@ if file:
 
     st.write(total_kcal,"kcal")
     
+
 
 
 
