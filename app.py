@@ -499,7 +499,7 @@ if file:
                 selected = st.selectbox(
                     "候補",
                     candidates,
-                    key=f"{i}_{ing['name']}_candidate",
+                    key=f"{url}_{i}_{ing['name']}_candidate",
                     label_visibility="visible"
                 )
             else:
@@ -508,7 +508,7 @@ if file:
             # ===== 常に検索欄 =====
             search_word = st.text_input(
                 "🔎 食材名を検索（候補に無い場合）",
-                key=f"{i}_{ing['name']}_search"
+                key=f"{url}_{i}_{ing['name']}_search"
             )
             
             if search_word:
@@ -521,7 +521,7 @@ if file:
                     selected = st.selectbox(
                         "検索結果",
                         results,
-                        key=f"{i}_{ing['name']}_manual",
+                        key=f"{url}_{i}_{ing['name']}_manual",
                         label_visibility="visible"
                     )
                 else:
@@ -546,7 +546,7 @@ if file:
                         "倍率",
                         [0.25,0.5,0.75,1,1.25,1.5,2,3],
                         index=3,
-                        key=f"{i}_{ing['name']}_multi"
+                        key=f"{url}_{i}_{ing['name']}_multi"
                     )
                 
                 display_g = default_g * multiplier * item_multiplier
@@ -556,7 +556,7 @@ if file:
                         "グラム",
                         value=int(display_g),
                         step=1,
-                        key=f"{i}_{ing['name']}_amt_{multiplier}_{item_multiplier}"
+                        key=f"{url}_{i}_{ing['name']}_amt_{multiplier}_{item_multiplier}"
                     )
 
                 
@@ -586,6 +586,7 @@ if file:
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
