@@ -195,6 +195,7 @@ if file:
     st.header("献立合計カロリー")
 
     st.write(total_kcal,"kcal")
-    )
+    
+
 
 
