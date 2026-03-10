@@ -313,6 +313,22 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
         return count * gram
 
     # ④ 個数変換
+    # 分数チェック 例: 1/2個
+    frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
+    
+    if frac_match and food_name and nutrition_dict:
+    
+        count = float(frac_match.group(1)) / float(frac_match.group(2))
+    
+        if food_name in nutrition_dict:
+    
+            gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
+    
+            if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
+                return 0.0
+    
+            return count * float(gram_per_unit)
+    
     unit_match = re.search(r'(\d+(?:\.\d+)?)', text)
 
     if unit_match and food_name and nutrition_dict:
@@ -589,6 +605,7 @@ if file:
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
