@@ -842,22 +842,22 @@ def show_recipe_search():
             
             my_bar.empty()
 
-            # =========================
-            # ボタン側の処理
-            # =========================
-            if st.button("📌 この画面のレシピをすべて追加"):
-                # 1. 保存したいデータをすべて一つのリストに集める
-                all_items = []
-                for url_key in st.session_state.selected_foods:
-                    for original, selected in st.session_state.selected_foods[url_key].items():
-                        all_items.append((original, selected))
-                
-                # 2. まとめて保存関数を1回だけ呼ぶ
-                if all_items:
-                    save_multiple_to_gsheet(all_items)
-                    st.success(f"全 {len(all_items)} 件の食材データを保存しました！")
-                else:
-                    st.warning("保存するデータがありません")
+        # =========================
+        # ボタン側の処理
+        # =========================
+        if st.button("📌 この画面のレシピをすべて追加"):
+            # 1. 保存したいデータをすべて一つのリストに集める
+            all_items = []
+            for url_key in st.session_state.selected_foods:
+                for original, selected in st.session_state.selected_foods[url_key].items():
+                    all_items.append((original, selected))
+            
+            # 2. まとめて保存関数を1回だけ呼ぶ
+            if all_items:
+                save_multiple_to_gsheet(all_items)
+                st.success(f"全 {len(all_items)} 件の食材データを保存しました！")
+            else:
+                st.warning("保存するデータがありません")
 
 
 
@@ -872,6 +872,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
