@@ -756,6 +756,15 @@ def show_recipe_search():
                 #st.session_state.page = "dashboard"
                 #st.rerun()
 
+        if st.button("📌 この画面のレシピをすべて追加"):
+
+            for url_key in st.session_state.selected_foods:
+        
+                for original, selected in st.session_state.selected_foods[url_key].items():
+                    save_to_gsheet(original, selected)
+        
+            st.success("すべて保存しました")
+
 
 
 if st.session_state.page == "dashboard":
@@ -769,6 +778,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
