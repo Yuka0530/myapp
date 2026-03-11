@@ -821,6 +821,7 @@ def show_recipe_search():
             my_bar = st.progress(0, text=progress_text)
         
             for idx, (original, selected) in enumerate(items_to_save):
+                st.write(idx,original,selected)
                 found = False
                 # 既存データにあるかチェック
                 for i, row in enumerate(all_data, start=1):
@@ -872,6 +873,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
