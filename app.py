@@ -745,9 +745,50 @@ def show_recipe_search():
             
                 st.success(f"{meal}に追加しました")
 
+                def save_all_to_gsheet(selected_items_list):
+                    """
+                    selected_items_list: [(original, selected), (original, selected), ...] 
+                    という形式のリストを受け取って一括保存する
+                    """
+                    client = connect_gsheet()
+                    sheet = client.open("food_mapping").sheet1
+                    
+                    # 現在のデータを1回だけ取得
+                    all_data = sheet.get_all_values()
+                    
+                    # 新しく追加する行を溜めるリスト
+                    rows_to_append = []
+                    
+                    for original, selected in selected_items_list:
+                        found = False
+                        # 既存データにあるか確認（ここをループ内で回すと重いですが、API通信よりはマシです）
+                        for i, row in enumerate(all_data[1:], start=2):
+                            if row[0] == original and row[1] == selected:
+                                # 既存のカウントアップは、本当は batch_update が理想ですが
+                                # まずは簡易的にここだけ通信
+                                count = int(row[2]) if len(row) > 2 and row[2] else 0
+                                sheet.update_cell(i, 3, count + 1)
+                                found = True
+                                break
+                        
+                        if not found:
+                            rows_to_append.append([original, selected, 1])
+                    
+                    # 溜まった新規行を「1回の通信」でドバッと追加
+                    if rows_to_append:
+                        sheet.append_rows(rows_to_append)
+
+                # 保存したいデータを一旦リストにまとめる
+                items_to_save = []
                 for original, selected in st.session_state.selected_foods.get(url, {}).items():
-                    st.write(original,selected)
-                    save_to_gsheet(original, selected)
+                    items_to_save.append((original, selected))
+                
+                # まとめて一回だけ関数を呼ぶ！
+                save_all_to_gsheet(items_to_save)
+ 
+                #for original, selected in st.session_state.selected_foods.get(url, {}).items():
+                    #st.write(original,selected)
+                    #save_to_gsheet(original, selected)
 
                 st.session_state.recipe_page_init = False
             
@@ -779,6 +820,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
