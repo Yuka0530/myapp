@@ -517,9 +517,17 @@ if file:
 
             # ===== 候補 =====
             if candidates:
+                def format_food_label(food):
+                    kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
+                    if kcal:
+                        return f"{food}   ({kcal} kcal/100g)"
+                    return food
+                
+                
                 selected = st.selectbox(
                     "候補",
                     candidates,
+                    format_func=format_food_label,
                     key=f"{url}_{i}_{ing['name']}_candidate",
                     label_visibility="visible"
                 )
@@ -539,9 +547,10 @@ if file:
                 ]
             
                 if results:
-                    selected = st.selectbox(
-                        "検索結果",
+                      selected = st.selectbox(
+                        "候補",
                         results,
+                        format_func=format_food_label,
                         key=f"{url}_{i}_{ing['name']}_manual",
                         label_visibility="visible"
                     )
@@ -607,6 +616,7 @@ if file:
                 save_to_gsheet(original, selected)
         
             st.success("Google Sheetsに保存しました！✨")
+
 
 
 
