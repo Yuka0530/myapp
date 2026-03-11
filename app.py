@@ -21,17 +21,6 @@ from google.oauth2.service_account import Credentials
 if "page" not in st.session_state:
     st.session_state.page = "dashboard"
 
-if st.session_state.page == "dashboard":
-    show_dashboard()
-
-elif st.session_state.page == "meal_add":
-    show_meal_add()
-
-elif st.session_state.page == "recipe_search":
-    show_recipe_search()
-
-elif st.session_state.page == "nutrition_graph":
-    show_nutrition_graph()
 
 # =========================
 # ダッシュボード
@@ -751,6 +740,20 @@ def show_recipe_search():
 
                 st.session_state.page = "dashboard"
                 st.rerun()
+
+
+
+if st.session_state.page == "dashboard":
+    show_dashboard()
+
+elif st.session_state.page == "meal_add":
+    show_meal_add()
+
+elif st.session_state.page == "recipe_search":
+    show_recipe_search()
+
+elif st.session_state.page == "nutrition_graph":
+    show_nutrition_graph()
 
 
 
