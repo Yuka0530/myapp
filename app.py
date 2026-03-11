@@ -761,6 +761,7 @@ def show_recipe_search():
             for url_key in st.session_state.selected_foods:
         
                 for original, selected in st.session_state.selected_foods[url_key].items():
+                    st.write(url_key,original,selected)
                     save_to_gsheet(original, selected)
         
             st.success("すべて保存しました")
@@ -778,6 +779,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
