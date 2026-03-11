@@ -111,9 +111,18 @@ def show_meal_add():
         st.session_state.page = "dashboard"
         st.rerun()
 
+# =========================
+# レシピ検索画面
+# =========================
 
 def show_recipe_search():
     st.set_page_config(layout="wide")
+
+    
+    if st.session_state.get("recipe_page_init") != True:
+        st.session_state.selected_foods = {}
+        st.session_state.ingredients = []
+        st.session_state.recipe_page_init = True
     
     st.title("デリッシュ献立スクショ → 栄養計算")
     
@@ -737,6 +746,8 @@ def show_recipe_search():
                 for original, selected in st.session_state.selected_foods.items():
                     st.write(original,selected)
                     save_to_gsheet(original, selected)
+
+                st.session_state.recipe_page_init = False
             
                 st.success("Google Sheetsに保存しました！✨")
 
@@ -756,6 +767,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
