@@ -171,6 +171,7 @@ def show_recipe_search():
                 return
     
         # 新規追加
+        st.write("append:", original, selected)
         sheet.append_row([original, selected, 1])
     
     @st.cache_data
@@ -753,6 +754,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
