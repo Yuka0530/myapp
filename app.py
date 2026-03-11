@@ -618,16 +618,15 @@ def show_recipe_search():
                 )
     
                 selected = None
+
+                def format_food_label(food):
+                    kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
+                    if kcal:
+                        return f"{food}   ({kcal} kcal/100g)"
+                    return food
     
                 # ===== 候補 =====
                 if candidates:
-                    def format_food_label(food):
-                        kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
-                        if kcal:
-                            return f"{food}   ({kcal} kcal/100g)"
-                        return food
-                    
-                    
                     selected = st.selectbox(
                         "候補",
                         candidates,
@@ -754,6 +753,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
