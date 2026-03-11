@@ -174,7 +174,7 @@ def show_recipe_search():
         rows = data[1:]
     
         for i, row in enumerate(rows, start=2):
-            st.write(i,row)
+            #st.write(i,row)
             if row[0] == original and row[1] == selected:
                 count = int(row[2]) if len(row) > 2 and row[2] else 0
                 sheet.update_cell(i, 3, count + 1)
@@ -767,6 +767,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
