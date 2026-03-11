@@ -760,9 +760,11 @@ def show_recipe_search():
                     rows_to_append = []
                     
                     for original, selected in selected_items_list:
+                        st.write(original,selected)
                         found = False
                         # 既存データにあるか確認（ここをループ内で回すと重いですが、API通信よりはマシです）
                         for i, row in enumerate(all_data[1:], start=2):
+                            st.write(i,row)
                             if row[0] == original and row[1] == selected:
                                 # 既存のカウントアップは、本当は batch_update が理想ですが
                                 # まずは簡易的にここだけ通信
@@ -820,6 +822,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
