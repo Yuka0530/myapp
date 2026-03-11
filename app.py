@@ -799,15 +799,65 @@ def show_recipe_search():
                 #st.session_state.page = "dashboard"
                 #st.rerun()
 
-        if st.button("📌 この画面のレシピをすべて追加"):
+        # =========================
+        # 一括保存用関数
+        # =========================
+        def save_multiple_to_gsheet(items_to_save):
+            """
+            items_to_save: [(original, selected), ...] のリスト
+            """
+            if not items_to_save:
+                return
+        
+            client = connect_gsheet()
+            sheet = client.open("food_mapping").sheet1
+            
+            # 全データを1回だけ取得（通信節約）
+            all_data = sheet.get_all_values()
+            new_rows = []
+        
+            # プログレスバーを出すとユーザーが安心します
+            progress_text = "Google Sheetsに保存中..."
+            my_bar = st.progress(0, text=progress_text)
+        
+            for idx, (original, selected) in enumerate(items_to_save):
+                found = False
+                # 既存データにあるかチェック
+                for i, row in enumerate(all_data, start=1):
+                    if len(row) >= 2 and row[0] == original and row[1] == selected:
+                        count = int(row[2]) if len(row) > 2 and row[2] else 0
+                        sheet.update_cell(i, 3, count + 1) # ここは1回通信が発生
+                        found = True
+                        break
+                
+                if not found:
+                    new_rows.append([original, selected, 1])
+                
+                # 進捗更新
+                my_bar.progress((idx + 1) / len(items_to_save), text=progress_text)
+        
+            # 新規データを一括で末尾に追加（ここが劇的に速い！）
+            if new_rows:
+                sheet.append_rows(new_rows)
+            
+            my_bar.empty()
 
-            for url_key in st.session_state.selected_foods:
-        
-                for original, selected in st.session_state.selected_foods[url_key].items():
-                    st.write(url_key,original,selected)
-                    save_to_gsheet(original, selected)
-        
-            st.success("すべて保存しました")
+            # =========================
+            # ボタン側の処理
+            # =========================
+            if st.button("📌 この画面のレシピをすべて追加"):
+                # 1. 保存したいデータをすべて一つのリストに集める
+                all_items = []
+                for url_key in st.session_state.selected_foods:
+                    for original, selected in st.session_state.selected_foods[url_key].items():
+                        all_items.append((original, selected))
+                
+                # 2. まとめて保存関数を1回だけ呼ぶ
+                if all_items:
+                    save_multiple_to_gsheet(all_items)
+                    st.success(f"全 {len(all_items)} 件の食材データを保存しました！")
+                else:
+                    st.warning("保存するデータがありません")
 
 
 
@@ -822,6 +872,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
