@@ -735,6 +735,7 @@ def show_recipe_search():
                 st.success(f"{meal}に追加しました")
             
                 for original, selected in st.session_state.selected_foods.items():
+                    st.write(original,selected)
                     save_to_gsheet(original, selected)
             
                 st.success("Google Sheetsに保存しました！✨")
@@ -755,6 +756,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
