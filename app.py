@@ -704,7 +704,9 @@ def show_recipe_search():
                         )
     
                     
-                    st.session_state.selected_foods[ing["name"]] = selected
+                    if url not in st.session_state.selected_foods:
+                        st.session_state.selected_foods[url] = {}
+                    st.session_state.selected_foods[url][ing["name"]] = selected
     
                     st.caption(f"📖 レシピ分量：{ing['amount']}")
                  
@@ -742,8 +744,8 @@ def show_recipe_search():
                 st.session_state.meal_data[meal].append(recipe)
             
                 st.success(f"{meal}に追加しました")
-            
-                for original, selected in st.session_state.selected_foods.items():
+
+                for original, selected in st.session_state.selected_foods.get(url, {}).items():
                     st.write(original,selected)
                     save_to_gsheet(original, selected)
 
@@ -752,7 +754,7 @@ def show_recipe_search():
                 st.success("Google Sheetsに保存しました！✨")
 
                 #st.session_state.page = "dashboard"
-                st.rerun()
+                #st.rerun()
 
 
 
@@ -767,6 +769,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
