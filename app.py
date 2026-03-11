@@ -72,11 +72,11 @@ def show_dashboard():
 
     for meal in ["朝食","昼食","夕食"]:
 
-    st.subheader(meal)
-
-    if meal in st.session_state.get("meal_data",{}):
-        for r in st.session_state.meal_data[meal]:
-            st.write(f"{r['title']}  {r['kcal']:.0f} kcal")
+        st.subheader(meal)
+    
+        if meal in st.session_state.get("meal_data",{}):
+            for r in st.session_state.meal_data[meal]:
+                st.write(f"{r['title']}  {r['kcal']:.0f} kcal")
 
 # =========================
 # 栄養グラフ画面
@@ -751,6 +751,7 @@ def show_recipe_search():
 
                 st.session_state.page = "dashboard"
                 st.rerun()
+
 
 
 
