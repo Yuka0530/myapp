@@ -740,7 +740,7 @@ def show_recipe_search():
             
                 st.success("Google Sheetsに保存しました！✨")
 
-                st.session_state.page = "dashboard"
+                #st.session_state.page = "dashboard"
                 st.rerun()
 
 
@@ -756,6 +756,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
