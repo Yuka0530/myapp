@@ -706,7 +706,7 @@ def show_recipe_search():
                     
                     if url not in st.session_state.selected_foods:
                         st.session_state.selected_foods[url] = {}
-                    st.session_state.selected_foods[url][f"{i}_{ing['name']}"] = selected
+                    st.session_state.selected_foods[url][ing["name"]] = selected
     
                     st.caption(f"📖 レシピ分量：{ing['amount']}")
                  
@@ -779,6 +779,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
