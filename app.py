@@ -28,6 +28,8 @@ if "page" not in st.session_state:
 
 def show_dashboard():
 
+
+
     st.title("食事記録")
 
     selected_date = st.date_input("日付")
@@ -58,6 +60,31 @@ def show_dashboard():
     if st.button("栄養グラフ"):
         st.session_state.page = "nutrition_graph"
         st.rerun()
+
+    @st.cache_data
+    def load_meal_log():
+    
+        client = connect_gsheet()
+        sheet = client.open("food_mapping").sheet2
+    
+        data = sheet.get_all_values()
+    
+        df = pd.DataFrame(data[1:], columns=data[0])
+    
+        return df
+    
+    logs = load_meal_log()
+
+    today = logs[logs["date"] == str(selected_date)]
+    
+    for meal in ["朝食","昼食","夕食"]:
+    
+        st.subheader(meal)
+    
+        rows = today[today["meal_type"] == meal]
+    
+        for _, r in rows.iterrows():
+            st.write(f"{r['recipe']} {float(r['kcal']):.0f} kcal")
 
     for meal in ["朝食","昼食","夕食"]:
 
@@ -753,6 +780,26 @@ def show_recipe_search():
                 }
             
                 st.session_state.meal_data[meal].append(recipe)
+                
+                #meal_logシートに保存する関数
+                def save_meal_log(date, meal_type, title, kcal):
+
+                    client = connect_gsheet()
+                    sheet = client.open("food_mapping").sheet2
+                
+                    sheet.append_row([
+                        str(date),
+                        meal_type,
+                        title,
+                        kcal
+                    ])
+               
+                save_meal_log(
+                    st.session_state.selected_date,
+                    meal,
+                    title,
+                    per_person
+                )
             
                 st.success(f"{meal}に追加しました")
 
@@ -906,6 +953,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
