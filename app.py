@@ -888,6 +888,11 @@ def show_recipe_search():
             else:
                 st.warning("保存するデータがありません")
 
+        if st.button("←topに戻る"):
+            st.session_state.recipes_current_page = {}
+            st.session_state.page = "dashboard"
+            st.rerun()
+
 
 
 if st.session_state.page == "dashboard":
@@ -901,6 +906,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
