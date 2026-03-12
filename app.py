@@ -106,13 +106,13 @@ def show_dashboard():
         for _, r in rows.iterrows():
             st.write(f"{r['recipe']} {float(r['kcal']):.0f} kcal")
 
-    for meal in ["朝食","昼食","夕食"]:
+    #for meal in ["朝食","昼食","夕食"]:
 
-        st.subheader(meal)
+        #st.subheader(meal)
     
-        if meal in st.session_state.get("meal_data",{}):
-            for r in st.session_state.meal_data[meal]:
-                st.write(f"{r['title']}  {r['kcal']:.0f} kcal")
+        #if meal in st.session_state.get("meal_data",{}):
+            #for r in st.session_state.meal_data[meal]:
+                #st.write(f"{r['title']}  {r['kcal']:.0f} kcal")
 
 # =========================
 # 栄養グラフ画面
@@ -961,6 +961,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
