@@ -127,6 +127,7 @@ def show_recipe_search():
     st.title("デリッシュ献立スクショ → 栄養計算")
     
     if st.button("←戻る"):
+        st.session_state.recipes_current_page = []
         st.session_state.page = "meal_add"
         st.rerun()
 
@@ -577,6 +578,10 @@ def show_recipe_search():
     
             if not url:
                 continue
+
+            #あレシピをすべて追加のための辞書作成
+            if "recipes_current_page" not in st.session_state:
+                st.session_state.recipes_current_page = []
     
             st.markdown("---")
     
@@ -722,6 +727,12 @@ def show_recipe_search():
             st.divider()
             st.subheader(f"合計カロリー: {total_cal:.1f} kcal")
             per_person = total_cal / servings_selected
+
+            #この画面のレシピすべて追加用にappend
+            st.session_state.recipes_current_page.append({
+                "title": title,
+                "kcal": per_person
+            })
     
             st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
     
@@ -738,7 +749,7 @@ def show_recipe_search():
             
                 recipe = {
                     "title": title,
-                    "kcal": total_cal
+                    "kcal": per_person
                 }
             
                 st.session_state.meal_data[meal].append(recipe)
@@ -847,6 +858,23 @@ def show_recipe_search():
         # ボタン側の処理
         # =========================
         if st.button("📌 この画面のレシピをすべて追加"):
+            meal = st.session_state.meal_type
+        
+            if "meal_data" not in st.session_state:
+                st.session_state.meal_data = {
+                    "朝食": [],
+                    "昼食": [],
+                    "夕食": []
+                }
+        
+            recipes = st.session_state.get("recipes_current_page", [])
+        
+            for r in recipes:
+                st.session_state.meal_data[meal].append(r)
+        
+            st.success(f"{meal}に{len(recipes)}レシピ追加しました")
+
+            
             # 1. 保存したいデータをすべて一つのリストに集める
             all_items = []
             for url_key in st.session_state.selected_foods:
@@ -873,6 +901,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
