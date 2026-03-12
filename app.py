@@ -579,7 +579,7 @@ def show_recipe_search():
             if not url:
                 continue
 
-            #あレシピをすべて追加のための辞書作成
+            #レシピをすべて追加のための辞書作成
             if "recipes_current_page" not in st.session_state:
                 st.session_state.recipes_current_page = []
     
@@ -729,10 +729,10 @@ def show_recipe_search():
             per_person = total_cal / servings_selected
 
             #この画面のレシピすべて追加用にappend
-            st.session_state.recipes_current_page.append({
+            st.session_state.recipes_current_page[url] = {
                 "title": title,
                 "kcal": per_person
-            })
+            }
     
             st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
     
@@ -869,7 +869,7 @@ def show_recipe_search():
         
             recipes = st.session_state.get("recipes_current_page", [])
         
-            for r in recipes:
+            for r in recipes.values():
                 st.session_state.meal_data[meal].append(r)
         
             st.success(f"{meal}に{len(recipes)}レシピ追加しました")
@@ -901,6 +901,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
