@@ -33,6 +33,20 @@ def connect_gsheet():
     client = gspread.authorize(credentials)
     return client
 
+
+
+@st.cache_data
+def load_meal_log():
+
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_log")
+
+    data = sheet.get_all_values()
+
+    df = pd.DataFrame(data[1:], columns=data[0])
+
+    return df
+
 # =========================
 # 画面管理（遷移）
 # =========================
@@ -81,17 +95,7 @@ def show_dashboard():
         st.session_state.page = "nutrition_graph"
         st.rerun()
 
-    @st.cache_data
-    def load_meal_log():
-    
-        client = connect_gsheet()
-        sheet = client.open("food_mapping").worksheet("meal_log")
-    
-        data = sheet.get_all_values()
-    
-        df = pd.DataFrame(data[1:], columns=data[0])
-    
-        return df
+
     
     logs = load_meal_log()
 
@@ -963,6 +967,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
