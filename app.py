@@ -15,6 +15,25 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # =========================
+# Google Sheets 接続
+# =========================
+
+def connect_gsheet():
+
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    credentials = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
+    )
+
+    client = gspread.authorize(credentials)
+    return client
+
+# =========================
 # 画面管理（遷移）
 # =========================
 
@@ -33,6 +52,7 @@ def show_dashboard():
     st.title("食事記録")
 
     selected_date = st.date_input("日付")
+    st.session_state.selected_date = selected_date
 
     st.subheader("朝食")
 
@@ -65,7 +85,7 @@ def show_dashboard():
     def load_meal_log():
     
         client = connect_gsheet()
-        sheet = client.open("food_mapping").sheet2
+        sheet = client.open("food_mapping").worksheet("meal_log")
     
         data = sheet.get_all_values()
     
@@ -175,20 +195,7 @@ def show_recipe_search():
     </style>
     """, unsafe_allow_html=True)
     
-    def connect_gsheet():
-    
-        scope = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-    
-        credentials = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=scope
-        )
-    
-        client = gspread.authorize(credentials)
-        return client
+
     # =========================
     # マッピング保存読み込み
     # =========================
@@ -785,7 +792,7 @@ def show_recipe_search():
                 def save_meal_log(date, meal_type, title, kcal):
 
                     client = connect_gsheet()
-                    sheet = client.open("food_mapping").sheet2
+                    sheet = client.open("food_mapping")..worksheet("meal_log")
                 
                     sheet.append_row([
                         str(date),
@@ -953,6 +960,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
