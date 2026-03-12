@@ -792,7 +792,7 @@ def show_recipe_search():
                 def save_meal_log(date, meal_type, title, kcal):
 
                     client = connect_gsheet()
-                    sheet = client.open("food_mapping")..worksheet("meal_log")
+                    sheet = client.open("food_mapping").worksheet("meal_log")
                 
                     sheet.append_row([
                         str(date),
@@ -960,6 +960,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
