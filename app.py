@@ -808,6 +808,8 @@ def show_recipe_search():
                     title,
                     per_person
                 )
+
+                load_meal_log.clear()
             
                 st.success(f"{meal}に追加しました")
 
@@ -961,6 +963,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
