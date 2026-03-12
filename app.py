@@ -127,7 +127,7 @@ def show_recipe_search():
     st.title("デリッシュ献立スクショ → 栄養計算")
     
     if st.button("←戻る"):
-        st.session_state.recipes_current_page = []
+        st.session_state.recipes_current_page = {}
         st.session_state.page = "meal_add"
         st.rerun()
 
@@ -581,7 +581,7 @@ def show_recipe_search():
 
             #レシピをすべて追加のための辞書作成
             if "recipes_current_page" not in st.session_state:
-                st.session_state.recipes_current_page = []
+                st.session_state.recipes_current_page = {}
     
             st.markdown("---")
     
@@ -867,7 +867,7 @@ def show_recipe_search():
                     "夕食": []
                 }
         
-            recipes = st.session_state.get("recipes_current_page", [])
+            recipes = st.session_state.get("recipes_current_page", {})
         
             for r in recipes.values():
                 st.session_state.meal_data[meal].append(r)
@@ -901,6 +901,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
