@@ -279,7 +279,7 @@ def show_nutrition_graph():
     fig.update_layout(
         height=600,
         xaxis_title="基準値比 (%)",
-        yaxis=dict(range=[0,200]),
+        yaxis=dict(autorange="reversed"),
         showlegend=False
     )
 
@@ -1209,6 +1209,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
