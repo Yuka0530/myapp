@@ -136,7 +136,7 @@ def show_nutrition_graph():
     st.title("栄養グラフ")
 
     logs = load_meal_log()
-    st.write(logs.dtypes)
+    #st.write(logs.dtypes)
 
     numeric_cols = [
         "kcal","protein","fat","carb","calcium","iron",
@@ -150,38 +150,136 @@ def show_nutrition_graph():
 
     totals = today[numeric_cols].sum()
 
-    recommended = {
-        "kcal":2000,
-        "protein":65,
-        "fat":60,
-        "carb":300,
-        "calcium":650,
-        "iron":7.5,
-        "vitA":900,
-        "vitE":6,
-        "vitB1":1.4,
-        "vitB2":1.6,
-        "vitC":100,
-        "fiber":20,
-        "salt":7
+    target = {
+        "kcal":1600,
+        "protein":60,
+        "fat":44,
+        "carb":240,
+        "fiber":18,
+        "salt":6.5,
+        "calcium":700,
+        "iron":8,
+        "vitA":750,
+        "vitE":6.5,
+        "vitB1":1,
+        "vitB2":1.2,
+        "vitC":100
     }
 
-    data = []
+    upper_limit = {
+        "vitA":2700,
+        "vitE":700,
+        "iron":40,
+        "calcium":2500
+    }
 
-    for k,v in recommended.items():
+    labels = {
+        "kcal":"エネルギー",
+        "protein":"たんぱく質",
+        "fat":"脂質",
+        "carb":"炭水化物",
+        "fiber":"食物繊維",
+        "salt":"塩分",
+        "calcium":"カルシウム",
+        "iron":"鉄",
+        "vitA":"ビタミンA",
+        "vitE":"ビタミンE",
+        "vitB1":"ビタミンB1",
+        "vitB2":"ビタミンB2",
+        "vitC":"ビタミンC"
+    }
 
-        intake = totals[k]
+    fig = go.Figure()
 
-        percent = intake / v * 100
+    y_labels = []
+    ratios = []
+    colors = []
+    texts = []
 
-        data.append({
-            "栄養素":k,
-            "摂取率":percent
-        })
+    for k in target:
 
-    df = pd.DataFrame(data)
+        intake = totals.get(k,0)
+        base = target[k]
 
-    st.bar_chart(df.set_index("栄養素"))
+        ratio = intake/base*100 if base > 0 else 0
+
+        if k in ["kcal","protein","fat","carb"]:
+        
+            low = 90
+            high = 120
+        
+        elif k in upper_limit:
+        
+            low = 100
+            high = upper_limit[k] / base * 100
+        
+        else:
+        
+            low = 100
+            high = None
+
+        if ratio < low:
+            status = "不足"
+            color = "#4da3ff"
+        elif high and ratio > high:
+            status = "過剰"
+            color = "#ff6b3d"
+        else:
+            status = "適正"
+            color = "#66bb44"
+
+        y_labels.append(labels[k])
+        ratios.append(ratio)
+        colors.append(color)
+
+        texts.append(
+            f"{status}<br>"
+            f"{intake:.1f} / {base}"
+        )
+
+        if high:
+            fig.add_shape(
+                type="rect",
+                x0=low,
+                x1=high,
+                y0=len(y_labels)-1.4,
+                y1=len(y_labels)-0.6,
+                fillcolor="rgba(120,200,120,0.25)",
+                line_width=0
+            )
+
+        fig.add_shape(
+            type="line",
+            x0=100,
+            x1=100,
+            y0=len(y_labels)-1.4,
+            y1=len(y_labels)-0.6,
+            line=dict(
+                color="gray",
+                width=2,
+                dash="dot"
+            )
+        )
+
+    fig.add_trace(go.Bar(
+        x=ratios,
+        y=y_labels,
+        orientation="h",
+        marker_color=colors,
+        text=texts,
+        textposition="outside"
+    ))
+
+    fig.update_layout(
+        height=600,
+        xaxis_title="基準値比 (%)",
+        yaxis=dict(autorange="reversed"),
+        showlegend=False
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    
 
     if st.button("←戻る"):
         st.session_state.page="dashboard"
@@ -1105,6 +1203,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
