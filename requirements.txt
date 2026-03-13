@@ -10,4 +10,5 @@ openpyxl
 ipywidgets
 gspread
 google-auth
-plotly.graph_objects
+plotly
+
