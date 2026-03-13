@@ -1181,18 +1181,42 @@ def show_recipe_search():
             
                 recipe = {
                     "title": title,
-                    "kcal": per_person_kcal
+                    "kcal": per_person_kcal,
+                    "protein": per_person_protein,
+                    "fat": per_person_fat,
+                    "carb": per_person_carb,
+                    "calcium": per_person_calcium,
+                    "iron": per_person_iron,
+                    "vitA": per_person_vita,
+                    "vitE": per_person_vite,
+                    "vitB1": per_person_vitb1,
+                    "vitB2": per_person_vitb2,
+                    "vitC": per_person_vitc,
+                    "fiber": per_person_fiber,
+                    "salt": per_person_salt
                 }
             
                 st.session_state.meal_data[meal].append(recipe)
                 
 
-               
+                           
                 save_meal_log(
                     st.session_state.selected_date,
                     meal,
                     title,
-                    per_person_kcal
+                    per_person_kcal,
+                    per_person_protein,
+                    per_person_fat,
+                    per_person_carb,
+                    per_person_calcium,
+                    per_person_iron,
+                    per_person_vita,
+                    per_person_vite,
+                    per_person_vitb1,
+                    per_person_vitb2,
+                    per_person_vitc,
+                    per_person_fiber,
+                    per_person_salt
                 )
 
                 load_meal_log.clear()
@@ -1375,6 +1399,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
