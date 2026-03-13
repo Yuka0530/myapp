@@ -51,6 +51,35 @@ def load_meal_log():
     return df
 
 # =========================
+#meal_logシートに保存する関数
+# =========================
+
+def save_meal_log(date, meal_type, title, kcal):
+
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_log")
+    st.write("gsheet:",date,meal_type,title,kcal)
+
+    sheet.append_row([
+        str(date),
+        meal_type,
+        title,
+        kcal,
+        protein,
+        fat,
+        carb,
+        calcium,
+        iron,
+        vita,
+        vite,
+        vitb1,
+        vitb2,
+        vitc,
+        fiber,
+        salt
+    ])
+
+# =========================
 # 画面管理（遷移）
 # =========================
 
@@ -1144,31 +1173,7 @@ def show_recipe_search():
             
                 st.session_state.meal_data[meal].append(recipe)
                 
-                #meal_logシートに保存する関数
-                def save_meal_log(date, meal_type, title, kcal):
 
-                    client = connect_gsheet()
-                    sheet = client.open("food_mapping").worksheet("meal_log")
-                    st.write("gsheet:",date,meal_type,title,kcal)
-                
-                    sheet.append_row([
-                        str(date),
-                        meal_type,
-                        title,
-                        kcal,
-                        protein,
-                        fat,
-                        carb,
-                        calcium,
-                        iron,
-                        vita,
-                        vite,
-                        vitb1,
-                        vitb2,
-                        vitc,
-                        fiber,
-                        salt
-                    ])
                
                 save_meal_log(
                     st.session_state.selected_date,
@@ -1357,6 +1362,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
