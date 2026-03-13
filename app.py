@@ -135,12 +135,20 @@ def show_nutrition_graph():
 
     st.title("栄養グラフ")
 
-    logs = load_meal_log()
-    st.write(logs.columns)
+    logs = load_meal_log)
+　　st.write(logs.dtypes)
+
+    numeric_cols = [
+        "kcal","protein","fat","carb","calcium","iron",
+        "vitA","vitE","vitB1","vitB2","vitC","fiber","salt"
+    ]
+    
+    for c in numeric_cols:
+        logs[c] = pd.to_numeric(logs[c], errors="coerce").fillna(0)
 
     today = logs[logs["date"] == str(st.session_state.selected_date)]
 
-    totals = today.sum(numeric_only=True)
+    totals = today[numeric_cols].sum()
 
     recommended = {
         "kcal":2000,
@@ -1097,6 +1105,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
