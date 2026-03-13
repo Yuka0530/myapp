@@ -135,21 +135,44 @@ def show_nutrition_graph():
 
     st.title("栄養グラフ")
 
-    meals = st.session_state.get("meal_data",{})
+    logs = load_meal_log()
 
-    total = 0
+    today = logs[logs["date"] == str(st.session_state.selected_date)]
 
-    for meal in meals:
-        for r in meals[meal]:
-            total += r["kcal"]
+    totals = today.sum(numeric_only=True)
 
-    st.metric("総カロリー", f"{total:.0f} kcal")
+    recommended = {
+        "kcal":2000,
+        "protein":65,
+        "fat":60,
+        "carb":300,
+        "calcium":650,
+        "iron":7.5,
+        "vitA":900,
+        "vitE":6,
+        "vitB1":1.4,
+        "vitB2":1.6,
+        "vitC":100,
+        "fiber":20,
+        "salt":7
+    }
 
-    st.bar_chart({
-        "朝食":[sum(r["kcal"] for r in meals.get("朝食",[]))],
-        "昼食":[sum(r["kcal"] for r in meals.get("昼食",[]))],
-        "夕食":[sum(r["kcal"] for r in meals.get("夕食",[]))]
-    })
+    data = []
+
+    for k,v in recommended.items():
+
+        intake = totals[k]
+
+        percent = intake / v * 100
+
+        data.append({
+            "栄養素":k,
+            "摂取率":percent
+        })
+
+    df = pd.DataFrame(data)
+
+    st.bar_chart(df.set_index("栄養素"))
 
     if st.button("←戻る"):
         st.session_state.page="dashboard"
@@ -764,10 +787,22 @@ def show_recipe_search():
                     st.caption(f"📖 レシピ分量：{ing['amount']}")
                  
                     st.divider()
-    
-    
-                    kcal_per100 = float(nutrition_dict[selected]["エネルギー"])
-                    kcal = kcal_per100 * amount / 100
+
+                    nut = nutrition_dict[selected]
+
+                    kcal += float(nut["エネルギー"]) * amount / 100
+                    protein += float(nut["たんぱく質"]) * amount / 100
+                    fat += float(nut["脂質"]) * amount / 100
+                    carb += float(nut["炭水化物"]) * amount / 100
+                    calcium += float(nut["カルシウム"]) * amount / 100
+                    iron += float(nut["鉄"]) * amount / 100
+                    vita += float(nut["ビタミンA"]) * amount / 100
+                    vite += float(nut["ビタミンE"]) * amount / 100
+                    vitb1 += float(nut["ビタミンB1"]) * amount / 100
+                    vitb2 += float(nut["ビタミンB2"]) * amount / 100
+                    vitc += float(nut["ビタミンC"]) * amount / 100
+                    fiber += float(nut["食物繊維"]) * amount / 100
+                    salt += float(nut["食塩相当量"]) * amount / 100
     
                     st.write(f"👉 {kcal:.1f} kcal")
                     total_cal += kcal
@@ -813,7 +848,19 @@ def show_recipe_search():
                         str(date),
                         meal_type,
                         title,
-                        kcal
+                        kcal,
+                        protein,
+                        fat,
+                        carb,
+                        calcium,
+                        iron,
+                        vita,
+                        vite,
+                        vitb1,
+                        vitb2,
+                        vitc,
+                        fiber,
+                        salt
                     ])
                
                 save_meal_log(
@@ -991,6 +1038,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
