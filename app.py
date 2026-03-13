@@ -834,7 +834,19 @@ def show_recipe_search():
             #この画面のレシピすべて追加用にappend
             st.session_state.recipes_current_page[url] = {
                 "title": title,
-                "kcal": per_person
+                "kcal": per_person_kcal,
+                "protein": per_person_protein,
+                "fat": per_person_fat,
+                "carb": per_person_carb,
+                "calcium": per_person_calcium,
+                "iron": per_person_iron,
+                "vitA": per_person_vita,
+                "vitE": per_person_vite,
+                "vitB1": per_person_vitb1,
+                "vitB2": per_person_vitb2,
+                "vitC": per_person_vitc,
+                "fiber": per_person_fiber,
+                "salt": per_person_salt
             }
     
             st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
@@ -1014,7 +1026,19 @@ def show_recipe_search():
                     str(date),
                     meal,
                     r["title"],
-                    r["kcal"]
+                    r["kcal"],
+                    r["protein"],
+                    r["fat"],
+                    r["carb"],
+                    r["calcium"],
+                    r["iron"],
+                    r["vitA"],
+                    r["vitE"],
+                    r["vitB1"],
+                    r["vitB2"],
+                    r["vitC"],
+                    r["fiber"],
+                    r["salt"]
                 ])
         
             # ⭐ 一括保存（高速）
@@ -1058,6 +1082,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
