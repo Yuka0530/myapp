@@ -33,7 +33,9 @@ def connect_gsheet():
     client = gspread.authorize(credentials)
     return client
 
-
+# =========================
+# 食事記録読み込み
+# =========================
 
 @st.cache_data
 def load_meal_log():
@@ -99,7 +101,7 @@ def show_dashboard():
     
     logs = load_meal_log()
 
-    today = logs[logs["date"] == str(selected_date)]
+    today = logs[logs["date"] == str(st.session_state.selected_date)]
     
     for meal in ["朝食","昼食","夕食"]:
     
@@ -919,19 +921,32 @@ def show_recipe_search():
         # ボタン側の処理
         # =========================
         if st.button("📌 この画面のレシピをすべて追加"):
-            meal = st.session_state.meal_type
         
-            if "meal_data" not in st.session_state:
-                st.session_state.meal_data = {
-                    "朝食": [],
-                    "昼食": [],
-                    "夕食": []
-                }
+            meal = st.session_state.meal_type
+            date = st.session_state.selected_date
         
             recipes = st.session_state.get("recipes_current_page", {})
         
+            client = connect_gsheet()
+            sheet = client.open("food_mapping").worksheet("meal_log")
+        
+            rows_to_save = []
+        
             for r in recipes.values():
-                st.session_state.meal_data[meal].append(r)
+                
+                # gsheet保存用
+                rows_to_save.append([
+                    str(date),
+                    meal,
+                    r["title"],
+                    r["kcal"]
+                ])
+        
+            # ⭐ 一括保存（高速）
+            if rows_to_save:
+                sheet.append_rows(rows_to_save)
+        
+            load_meal_log.clear()
         
             st.success(f"{meal}に{len(recipes)}レシピ追加しました")
 
@@ -967,6 +982,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
