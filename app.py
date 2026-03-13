@@ -460,12 +460,24 @@ def show_meal_add():
         st.write(f"{food['エネルギー']} kcal")
 
         if st.button("登録"):
-
+            
             save_meal_log(
                 st.session_state.selected_date,
                 st.session_state.meal_type,
                 food["食材"],
-                food["エネルギー"]
+                food["エネルギー"],
+                food["たんぱく質"],
+                food["脂質"],
+                food["炭水化物"],
+                food["カルシウム"],
+                food["鉄"],
+                food["ビタミンA"],
+                food["ビタミンE"],
+                food["ビタミンB1"],
+                food["ビタミンB2"],
+                food["ビタミンC"],
+                food["食物繊維"],
+                food["食塩相当量"]
             )
 
             st.success("登録しました")
@@ -1362,6 +1374,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
