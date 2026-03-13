@@ -213,6 +213,11 @@ def show_nutrition_graph():
         
             low = 100
             high = upper_limit[k] / base * 100
+
+        elif k == "salt":
+        
+            low = 0
+            high = 100
         
         else:
         
@@ -1204,6 +1209,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
