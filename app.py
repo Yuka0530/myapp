@@ -136,6 +136,7 @@ def show_nutrition_graph():
     st.title("栄養グラフ")
 
     logs = load_meal_log()
+    st.write(logs.columns)
 
     today = logs[logs["date"] == str(st.session_state.selected_date)]
 
@@ -1096,6 +1097,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
