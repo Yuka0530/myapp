@@ -13,6 +13,7 @@ import re
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+import plotly.graph_objects as go
 
 # =========================
 # Google Sheets 接続
@@ -1203,6 +1204,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
