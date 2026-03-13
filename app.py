@@ -67,7 +67,12 @@ def show_dashboard():
 
     st.title("食事記録")
 
-    selected_date = st.date_input("日付")
+    selected_date = st.date_input(
+        "日付",
+        value=st.session_state.get("selected_date")
+        key="dashboard_date"
+    )
+    
     st.session_state.selected_date = selected_date
 
     st.subheader("朝食")
@@ -947,6 +952,7 @@ def show_recipe_search():
                 sheet.append_rows(rows_to_save)
         
             load_meal_log.clear()
+            st.session_state.recipes_current_page = {}
         
             st.success(f"{meal}に{len(recipes)}レシピ追加しました")
 
@@ -982,6 +988,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
