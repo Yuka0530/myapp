@@ -67,9 +67,12 @@ def show_dashboard():
 
     st.title("食事記録")
 
+    if "selected_date" not in st.session_state:
+        st.session_state.selected_date = pd.Timestamp.today()
+    
     selected_date = st.date_input(
         "日付",
-        value=st.session_state.get("selected_date"),
+        value=st.session_state.selected_date,
         key="dashboard_date"
     )
     
@@ -988,6 +991,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
