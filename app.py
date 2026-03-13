@@ -54,7 +54,24 @@ def load_meal_log():
 #meal_logシートに保存する関数
 # =========================
 
-def save_meal_log(date, meal_type, title, kcal):
+def save_meal_log(
+    date,
+    meal_type,
+    title,
+    kcal,
+    protein,
+    fat,
+    carb,
+    calcium,
+    iron,
+    vita,
+    vite,
+    vitb1,
+    vitb2,
+    vitc,
+    fiber,
+    salt
+):
 
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
@@ -1399,6 +1416,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
