@@ -804,19 +804,25 @@ def show_recipe_search():
 
                     nut = nutrition_dict[selected]
 
-                    kcal += float(nut["エネルギー"]) * amount / 100
-                    protein += float(nut["たんぱく質"]) * amount / 100
-                    fat += float(nut["脂質"]) * amount / 100
-                    carb += float(nut["炭水化物"]) * amount / 100
-                    calcium += float(nut["カルシウム"]) * amount / 100
-                    iron += float(nut["鉄"]) * amount / 100
-                    vita += float(nut["ビタミンA"]) * amount / 100
-                    vite += float(nut["ビタミンE"]) * amount / 100
-                    vitb1 += float(nut["ビタミンB1"]) * amount / 100
-                    vitb2 += float(nut["ビタミンB2"]) * amount / 100
-                    vitc += float(nut["ビタミンC"]) * amount / 100
-                    fiber += float(nut["食物繊維"]) * amount / 100
-                    salt += float(nut["食塩相当量"]) * amount / 100
+                    def safe_float(x):
+                        try:
+                            return float(x)
+                        except:
+                            return 0
+
+                    kcal += safe_float(nut["エネルギー"]) * amount / 100
+                    protein += safe_float(nut["たんぱく質"]) * amount / 100
+                    fat += safe_float(nut["脂質"]) * amount / 100
+                    carb += safe_float(nut["炭水化物"]) * amount / 100
+                    calcium += safe_float(nut["カルシウム"]) * amount / 100
+                    iron += safe_float(nut["鉄"]) * amount / 100
+                    vita += safe_float(nut["ビタミンA"]) * amount / 100
+                    vite += safe_float(nut["ビタミンE"]) * amount / 100
+                    vitb1 += safe_float(nut["ビタミンB1"]) * amount / 100
+                    vitb2 += safe_float(nut["ビタミンB2"]) * amount / 100
+                    vitc += safe_float(nut["ビタミンC"]) * amount / 100
+                    fiber += safe_float(nut["食物繊維"]) * amount / 100
+                    salt += safe_float(nut["食塩相当量"]) * amount / 100
     
                     st.write(f"👉 {kcal:.1f} kcal")
                     total_cal += kcal
@@ -1052,6 +1058,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
