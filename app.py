@@ -831,6 +831,20 @@ def show_recipe_search():
             st.subheader(f"合計カロリー: {total_cal:.1f} kcal")
             per_person = total_cal / servings_selected
 
+            per_person_kcal = kcal / servings_selected
+            per_person_protein = protein / servings_selected
+            per_person_fat = fat / servings_selected
+            per_person_carb = carb / servings_selected
+            per_person_calcium = calcium / servings_selected
+            per_person_iron = iron / servings_selected
+            per_person_vita = vita / servings_selected
+            per_person_vite = vite / servings_selected
+            per_person_vitb1 = vitb1 / servings_selected
+            per_person_vitb2 = vitb2 / servings_selected
+            per_person_vitc = vitc / servings_selected
+            per_person_fiber = fiber / servings_selected
+            per_person_salt = salt / servings_selected
+
             #この画面のレシピすべて追加用にappend
             st.session_state.recipes_current_page[url] = {
                 "title": title,
@@ -849,7 +863,7 @@ def show_recipe_search():
                 "salt": per_person_salt
             }
     
-            st.subheader(f"🍽 1人分カロリー: {per_person:.1f} kcal")
+            st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
     
     
             if st.button("📌 レシピとして追加", key=f"save_{url}"):
@@ -864,7 +878,7 @@ def show_recipe_search():
             
                 recipe = {
                     "title": title,
-                    "kcal": per_person
+                    "kcal": per_person_kcal
                 }
             
                 st.session_state.meal_data[meal].append(recipe)
@@ -899,7 +913,7 @@ def show_recipe_search():
                     st.session_state.selected_date,
                     meal,
                     title,
-                    per_person
+                    per_person_kcal
                 )
 
                 load_meal_log.clear()
@@ -1082,6 +1096,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
