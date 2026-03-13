@@ -136,7 +136,7 @@ def show_nutrition_graph():
     st.title("栄養グラフ")
 
     logs = load_meal_log
-　　st.write(logs.dtypes)
+    st.write(logs.dtypes)
 
     numeric_cols = [
         "kcal","protein","fat","carb","calcium","iron",
@@ -1105,6 +1105,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
