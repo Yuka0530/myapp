@@ -646,6 +646,20 @@ def show_recipe_search():
             st.session_state.selected_foods = {}
     
         for url in urls:
+
+            kcal = 0
+            protein = 0
+            fat = 0
+            carb = 0
+            calcium = 0
+            iron = 0
+            vita = 0
+            vite = 0
+            vitb1 = 0
+            vitb2 = 0
+            vitc = 0
+            fiber = 0
+            salt = 0
     
             if not url:
                 continue
@@ -1038,6 +1052,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
