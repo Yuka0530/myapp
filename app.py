@@ -460,6 +460,7 @@ def show_meal_add():
         st.write(f"{food['エネルギー']} kcal")
 
         if st.button("登録"):
+            st.write(food)
             
             save_meal_log(
                 st.session_state.selected_date,
@@ -1374,6 +1375,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
