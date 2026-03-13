@@ -328,125 +328,123 @@ def show_meal_add():
         return results    
     
 
+
+
     st.title(f"{st.session_state.meal_type} を追加")
 
-    def show_meal_add():
+    # 検索UI表示フラグ
+    if "show_search" not in st.session_state:
+        st.session_state.show_search = False
 
-        st.title(f"{st.session_state.meal_type} を追加")
-    
-        # 検索UI表示フラグ
-        if "show_search" not in st.session_state:
-            st.session_state.show_search = False
-    
-        if "search_results" not in st.session_state:
-            st.session_state.search_results = {}
-    
-        if "selected_food" not in st.session_state:
-            st.session_state.selected_food = None
-    
-        # =========================
-        # 検索バー
-        # =========================
-    
-        if st.text_input("🔍 料理名・食材名で検索", key="search_bar"):
-            st.session_state.show_search = True
-    
-    
-        # =========================
-        # ②検索ワード10個入力
-        # =========================
-    
-        if st.session_state.show_search:
-    
-            st.info("一度に10件検索できます")
-    
-            words = []
-    
-            for i in range(10):
-    
-                w = st.text_input(
-                    f"検索{i+1}",
-                    key=f"word_{i}"
-                )
-    
-                words.append(w)
-    
-            if st.button("検索"):
-    
-                st.session_state.search_results = search_foods(words)
-    
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = {}
+
+    if "selected_food" not in st.session_state:
+        st.session_state.selected_food = None
+
+    # =========================
+    # 検索バー
+    # =========================
+
+    if st.text_input("🔍 料理名・食材名で検索", key="search_bar"):
+        st.session_state.show_search = True
+
+
+    # =========================
+    # ②検索ワード10個入力
+    # =========================
+
+    if st.session_state.show_search:
+
+        st.info("一度に10件検索できます")
+
+        words = []
+
+        for i in range(10):
+
+            w = st.text_input(
+                f"検索{i+1}",
+                key=f"word_{i}"
+            )
+
+            words.append(w)
+
+        if st.button("検索"):
+
+            st.session_state.search_results = search_foods(words)
+
+            st.rerun()
+
+
+    # =========================
+    # ③候補数表示
+    # =========================
+
+    if st.session_state.search_results:
+
+        for word, df in st.session_state.search_results.items():
+
+            if df.empty:
+                continue
+
+            if st.button(f"{word} ({len(df)}件)", key=f"btn_{word}"):
+
+                st.session_state.selected_word = word
                 st.rerun()
-    
-    
-        # =========================
-        # ③候補数表示
-        # =========================
-    
-        if st.session_state.search_results:
-    
-            for word, df in st.session_state.search_results.items():
-    
-                if df.empty:
-                    continue
-    
-                if st.button(f"{word} ({len(df)}件)", key=f"btn_{word}"):
-    
-                    st.session_state.selected_word = word
-                    st.rerun()
-    
-    
-        # =========================
-        # ④候補一覧
-        # =========================
-    
-        if "selected_word" in st.session_state:
-    
-            word = st.session_state.selected_word
-            df = st.session_state.search_results[word]
-    
-            st.subheader(word)
-    
-            for i,row in df.iterrows():
-    
-                food = row["食材"]
-                kcal = row["エネルギー"]
-    
-                if st.button(f"{food} {kcal} kcal", key=f"food_{i}"):
-    
-                    st.session_state.selected_food = row
-                    st.rerun()
-    
-    
-        # =========================
-        # ⑤登録確認
-        # =========================
-    
-        if st.session_state.selected_food is not None:
-    
-            food = st.session_state.selected_food
-    
-            st.divider()
-    
-            st.subheader("登録確認")
-    
-            st.write(food["食材"])
-            st.write(f"{food['エネルギー']} kcal")
-    
-            if st.button("登録"):
-    
-                save_meal_log(
-                    st.session_state.selected_date,
-                    st.session_state.meal_type,
-                    food["食材"],
-                    food["エネルギー"]
-                )
-    
-                st.success("登録しました")
-    
-                st.session_state.selected_food = None
-                st.session_state.search_results = {}
-    
-                load_meal_log.clear()
+
+
+    # =========================
+    # ④候補一覧
+    # =========================
+
+    if "selected_word" in st.session_state:
+
+        word = st.session_state.selected_word
+        df = st.session_state.search_results[word]
+
+        st.subheader(word)
+
+        for i,row in df.iterrows():
+
+            food = row["食材"]
+            kcal = row["エネルギー"]
+
+            if st.button(f"{food} {kcal} kcal", key=f"food_{i}"):
+
+                st.session_state.selected_food = row
+                st.rerun()
+
+
+    # =========================
+    # ⑤登録確認
+    # =========================
+
+    if st.session_state.selected_food is not None:
+
+        food = st.session_state.selected_food
+
+        st.divider()
+
+        st.subheader("登録確認")
+
+        st.write(food["食材"])
+        st.write(f"{food['エネルギー']} kcal")
+
+        if st.button("登録"):
+
+            save_meal_log(
+                st.session_state.selected_date,
+                st.session_state.meal_type,
+                food["食材"],
+                food["エネルギー"]
+            )
+
+            st.success("登録しました")
+
+            st.session_state.selected_food = None
+            st.session_state.search_results = {}
+
+            load_meal_log.clear()
 
     if st.button("レシピサイトを検索"):
         st.session_state.page = "recipe_search"
@@ -1359,6 +1357,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
