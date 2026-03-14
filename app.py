@@ -443,7 +443,10 @@ def show_meal_add():
     # ④候補一覧
     # =========================
 
-    if "selected_word" in st.session_state:
+    if (
+        "selected_word" in st.session_state
+        and st.session_state.selected_word in st.session_state.search_results
+    ):
 
         word = st.session_state.selected_word
         df = st.session_state.search_results[word]
@@ -510,6 +513,12 @@ def show_meal_add():
         st.rerun()
 
     if st.button("←戻る"):
+    
+        st.session_state.search_results = {}
+        st.session_state.selected_word = None
+        st.session_state.selected_food = None
+        st.session_state.show_search = False
+    
         st.session_state.page = "dashboard"
         st.rerun()
 
@@ -1416,6 +1425,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
