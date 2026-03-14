@@ -431,116 +431,116 @@ def show_meal_add():
             st.rerun()
             
 
-        #③候補数表示
-        elif st.session_state.search_step == 2:
-        
-            st.subheader("検索結果")
-        
-            for word in st.session_state.remaining_words:
-        
-                df = st.session_state.search_results[word]
-        
-                if st.button(f"{word} ({len(df)}件)", key=f"btn_{word}"):
-        
-                    st.session_state.current_word = word
-                    st.session_state.search_step = 3
-                    st.rerun()
-
-        #④候補一覧
-        elif st.session_state.search_step == 3:
-        
-            word = st.session_state.current_word
+    #③候補数表示
+    elif st.session_state.search_step == 2:
+    
+        st.subheader("検索結果")
+    
+        for word in st.session_state.remaining_words:
+    
             df = st.session_state.search_results[word]
-        
-            st.subheader(word)
-        
-            for i,row in df.iterrows():
-        
-                food = row["食材"]
-                kcal = row["エネルギー"]
-        
-                if st.button(f"{food} {kcal} kcal", key=f"food_{i}"):
-        
-                    st.session_state.selected_foods_temp.append(row)
-        
-                    st.session_state.remaining_words.remove(word)
-        
-                    if len(st.session_state.remaining_words) == 0:
-                        st.session_state.search_step = 4
-                    else:
-                        st.session_state.search_step = 2
-        
-                    st.rerun()
-                    
-
-        #⑤最終登録確認
-        elif st.session_state.search_step == 4:
-        
-            st.subheader("登録確認")
-        
-            foods = st.session_state.selected_foods_temp
-        
-            results = []
-        
-            for i,food in enumerate(foods):
-        
-                st.write(food["食材"])
-        
-                amount = st.number_input(
-                    f"分量(g) {i}",
-                    value=100,
-                    step=10,
-                    key=f"amt_{i}"
-                )
-        
-                ratio = amount / 100
-        
-                def safe_float(x):
-                    try:
-                        return float(x)
-                    except:
-                        return 0
-        
-                kcal = safe_float(food["エネルギー"]) * ratio
-        
-                st.write(f"{kcal:.1f} kcal")
-        
-                results.append((food,amount))
-        
-            if st.button("完了"):
-        
-                for food,amount in results:
-        
-                    ratio = amount / 100
-        
-                    save_meal_log(
-                        st.session_state.selected_date,
-                        st.session_state.meal_type,
-                        food["食材"],
-                        safe_float(food["エネルギー"]) * ratio,
-                        safe_float(food["たんぱく質"]) * ratio,
-                        safe_float(food["脂質"]) * ratio,
-                        safe_float(food["炭水化物"]) * ratio,
-                        safe_float(food["カルシウム"]) * ratio,
-                        safe_float(food["鉄"]) * ratio,
-                        safe_float(food["ビタミンA"]) * ratio,
-                        safe_float(food["ビタミンE"]) * ratio,
-                        safe_float(food["ビタミンB1"]) * ratio,
-                        safe_float(food["ビタミンB2"]) * ratio,
-                        safe_float(food["ビタミンC"]) * ratio,
-                        safe_float(food["食物繊維"]) * ratio,
-                        safe_float(food["食塩相当量"]) * ratio
-                    )
-        
-                st.success("登録しました")
-        
-                st.session_state.search_step = 0
-                st.session_state.selected_foods_temp = []
-                st.session_state.search_results = {}
-        
-                load_meal_log.clear()
-        
+    
+            if st.button(f"{word} ({len(df)}件)", key=f"btn_{word}"):
+    
+                st.session_state.current_word = word
+                st.session_state.search_step = 3
                 st.rerun()
+
+    #④候補一覧
+    elif st.session_state.search_step == 3:
+    
+        word = st.session_state.current_word
+        df = st.session_state.search_results[word]
+    
+        st.subheader(word)
+    
+        for i,row in df.iterrows():
+    
+            food = row["食材"]
+            kcal = row["エネルギー"]
+    
+            if st.button(f"{food} {kcal} kcal", key=f"food_{i}"):
+    
+                st.session_state.selected_foods_temp.append(row)
+    
+                st.session_state.remaining_words.remove(word)
+    
+                if len(st.session_state.remaining_words) == 0:
+                    st.session_state.search_step = 4
+                else:
+                    st.session_state.search_step = 2
+    
+                st.rerun()
+                
+
+    #⑤最終登録確認
+    elif st.session_state.search_step == 4:
+    
+        st.subheader("登録確認")
+    
+        foods = st.session_state.selected_foods_temp
+    
+        results = []
+    
+        for i,food in enumerate(foods):
+    
+            st.write(food["食材"])
+    
+            amount = st.number_input(
+                f"分量(g) {i}",
+                value=100,
+                step=10,
+                key=f"amt_{i}"
+            )
+    
+            ratio = amount / 100
+    
+            def safe_float(x):
+                try:
+                    return float(x)
+                except:
+                    return 0
+    
+            kcal = safe_float(food["エネルギー"]) * ratio
+    
+            st.write(f"{kcal:.1f} kcal")
+    
+            results.append((food,amount))
+    
+        if st.button("完了"):
+    
+            for food,amount in results:
+    
+                ratio = amount / 100
+    
+                save_meal_log(
+                    st.session_state.selected_date,
+                    st.session_state.meal_type,
+                    food["食材"],
+                    safe_float(food["エネルギー"]) * ratio,
+                    safe_float(food["たんぱく質"]) * ratio,
+                    safe_float(food["脂質"]) * ratio,
+                    safe_float(food["炭水化物"]) * ratio,
+                    safe_float(food["カルシウム"]) * ratio,
+                    safe_float(food["鉄"]) * ratio,
+                    safe_float(food["ビタミンA"]) * ratio,
+                    safe_float(food["ビタミンE"]) * ratio,
+                    safe_float(food["ビタミンB1"]) * ratio,
+                    safe_float(food["ビタミンB2"]) * ratio,
+                    safe_float(food["ビタミンC"]) * ratio,
+                    safe_float(food["食物繊維"]) * ratio,
+                    safe_float(food["食塩相当量"]) * ratio
+                )
+    
+            st.success("登録しました")
+    
+            st.session_state.search_step = 0
+            st.session_state.selected_foods_temp = []
+            st.session_state.search_results = {}
+    
+            load_meal_log.clear()
+    
+            st.rerun()
 
 
 
@@ -550,10 +550,9 @@ def show_meal_add():
 
     if st.button("←戻る"):
     
+        st.session_state.search_step = 0
         st.session_state.search_results = {}
-        st.session_state.selected_word = None
-        st.session_state.selected_food = None
-        st.session_state.show_search = False
+        st.session_state.selected_foods_temp = []
     
         st.session_state.page = "dashboard"
         st.rerun()
@@ -1461,6 +1460,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
