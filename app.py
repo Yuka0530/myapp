@@ -488,7 +488,7 @@ def show_meal_add():
 
         ratio = amount / 100
 
-         = float(food["エネルギー"]) * ratio
+        kcal = = float(food["エネルギー"]) * ratio
         protein = float(food["たんぱく質"]) * ratio
         fat = float(food["脂質"]) * ratio
         carb = float(food["炭水化物"]) * ratio
@@ -1449,6 +1449,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
