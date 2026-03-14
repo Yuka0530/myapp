@@ -392,7 +392,9 @@ def show_meal_add():
     # 検索バー
     # =========================
 
-    if st.text_input("🔍 料理名・食材名で検索", key="search_bar"):
+    st.text_input("🔍 料理名・食材名で検索", key="search_bar")
+    
+    if st.button("検索画面を開く"):
         st.session_state.show_search = True
 
 
@@ -477,7 +479,30 @@ def show_meal_add():
         st.subheader("登録確認")
 
         st.write(food["食材"])
-        st.write(f"{food['エネルギー']} kcal")
+        
+        amount = st.number_input(
+            "分量(g)",
+            value=100,
+            step=10
+        )
+
+        ratio = amount / 100
+
+         = float(food["エネルギー"]) * ratio
+        protein = float(food["たんぱく質"]) * ratio
+        fat = float(food["脂質"]) * ratio
+        carb = float(food["炭水化物"]) * ratio
+        calcium = float(food["カルシウム"]) * ratio
+        iron = float(food["鉄"]) * ratio
+        vita = float(food["ビタミンA"]) * ratio
+        vite = float(food["ビタミンE"]) * ratio
+        vitb1 = float(food["ビタミンB1"]) * ratio
+        vitb2 = float(food["ビタミンB2"]) * ratio
+        vitc = float(food["ビタミンC"]) * ratio
+        fiber = float(food["食物繊維"]) * ratio
+        salt = float(food["食塩相当量"]) * ratio
+
+        st.write(f"{kcal:.1f} kcal")
 
         if st.button("登録"):
             st.write(food)
@@ -486,25 +511,24 @@ def show_meal_add():
                 st.session_state.selected_date,
                 st.session_state.meal_type,
                 food["食材"],
-                food["エネルギー"],
-                food["たんぱく質"],
-                food["脂質"],
-                food["炭水化物"],
-                food["カルシウム"],
-                food["鉄"],
-                food["ビタミンA"],
-                food["ビタミンE"],
-                food["ビタミンB1"],
-                food["ビタミンB2"],
-                food["ビタミンC"],
-                food["食物繊維"],
-                food["食塩相当量"]
+                kcal,
+                protein,
+                fat,
+                carb,
+                calcium,
+                iron,
+                vita,
+                vite,
+                vitb1,
+                vitb2,
+                vitc,
+                fiber,
+                salt
             )
 
             st.success("登録しました")
 
             st.session_state.selected_food = None
-            st.session_state.search_results = {}
 
             load_meal_log.clear()
 
@@ -1425,6 +1449,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
