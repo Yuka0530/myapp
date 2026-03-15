@@ -34,6 +34,12 @@ def connect_gsheet():
     client = gspread.authorize(credentials)
     return client
 
+def safe_float(x):
+    try:
+        return float(x)
+    except:
+        return 0
+
 # =========================
 # 食事記録読み込み
 # =========================
@@ -568,11 +574,7 @@ def show_meal_add():
     
             ratio = amount / 100
     
-            def safe_float(x):
-                try:
-                    return float(x)
-                except:
-                    return 0
+
     
             kcal = safe_float(food["エネルギー"]) * ratio
     
@@ -1537,6 +1539,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
