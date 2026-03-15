@@ -106,19 +106,19 @@ def calc_nutrition(ingredients, nutrition_dict):
 
         st.write(ing)
 
-        kcal += float(nut["エネルギー"]) * gram / 100
-        protein += float(nut["たんぱく質"]) * gram / 100
-        fat += float(nut["脂質"]) * gram / 100
-        carb += float(nut["炭水化物"]) * gram / 100
-        calcium += float(nut["カルシウム"]) * gram / 100
-        iron += float(nut["鉄"]) * gram / 100
-        vita += float(nut["ビタミンA"]) * gram / 100
-        vite += float(nut["ビタミンE"]) * gram / 100
-        vitb1 += float(nut["ビタミンB1"]) * gram / 100
-        vitb2 += float(nut["ビタミンB2"]) * gram / 100
-        vitc += float(nut["ビタミンC"]) * gram / 100
-        fiber += float(nut["食物繊維"]) * gram / 100
-        salt += float(nut["食塩相当量"]) * gram / 100
+        kcal += safe_float(nut["エネルギー"]) * gram / 100
+        protein += safe_float(nut["たんぱく質"]) * gram / 100
+        fat += safe_float(nut["脂質"]) * gram / 100
+        carb += safe_float(nut["炭水化物"]) * gram / 100
+        calcium += safe_float(nut["カルシウム"]) * gram / 100
+        iron += safe_float(nut["鉄"]) * gram / 100
+        vita += safe_float(nut["ビタミンA"]) * gram / 100
+        vite += safe_float(nut["ビタミンE"]) * gram / 100
+        vitb1 += safe_float(nut["ビタミンB1"]) * gram / 100
+        vitb2 += safe_float(nut["ビタミンB2"]) * gram / 100
+        vitc += safe_float(nut["ビタミンC"]) * gram / 100
+        fiber += safe_float(nut["食物繊維"]) * gram / 100
+        salt += safe_float(nut["食塩相当量"]) * gram / 100
 
     return {
         "kcal":kcal,
@@ -1537,6 +1537,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
