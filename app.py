@@ -104,6 +104,8 @@ def calc_nutrition(ingredients, nutrition_dict):
         if not nut:
             continue
 
+        st.write(ing)
+
         kcal += float(nut["エネルギー"]) * gram / 100
         protein += float(nut["たんぱく質"]) * gram / 100
         fat += float(nut["脂質"]) * gram / 100
@@ -1535,6 +1537,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
