@@ -54,47 +54,113 @@ def load_meal_log():
 #meal_logシートに保存する関数
 # =========================
 
-def save_meal_log(
-    date,
-    meal_type,
-    title,
-    kcal,
-    protein,
-    fat,
-    carb,
-    calcium,
-    iron,
-    vita,
-    vite,
-    vitb1,
-    vitb2,
-    vitc,
-    fiber,
-    salt
-):
+def save_meal_log_base(date, meal_type, recipe):
 
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
-    st.write("gsheet:",date,meal_type,title,kcal)
+
+    data = sheet.get_all_values()
+
+    new_id = len(data)
 
     sheet.append_row([
+        new_id,
         str(date),
         meal_type,
-        title,
-        kcal,
-        protein,
-        fat,
-        carb,
-        calcium,
-        iron,
-        vita,
-        vite,
-        vitb1,
-        vitb2,
-        vitc,
-        fiber,
-        salt
+        recipe
     ])
+
+    return new_id
+
+def save_ingredients(meal_id, ingredients):
+
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_ingredients")
+
+    rows = []
+
+    for ing in ingredients:
+
+        rows.append([
+            meal_id,
+            ing["food"],
+            ing["gram"]
+        ])
+
+    sheet.append_rows(rows)
+
+def calc_nutrition(ingredients, nutrition_dict):
+
+    kcal=protein=fat=carb=0
+    calcium=iron=vita=vite=vitb1=vitb2=vitc=fiber=salt=0
+
+    for ing in ingredients:
+
+        food = ing["food"]
+        gram = ing["gram"]
+
+        nut = nutrition_dict[food]
+
+        kcal += float(nut["エネルギー"]) * gram / 100
+        protein += float(nut["たんぱく質"]) * gram / 100
+        fat += float(nut["脂質"]) * gram / 100
+        carb += float(nut["炭水化物"]) * gram / 100
+        calcium += float(nut["カルシウム"]) * gram / 100
+        iron += float(nut["鉄"]) * gram / 100
+        vita += float(nut["ビタミンA"]) * gram / 100
+        vite += float(nut["ビタミンE"]) * gram / 100
+        vitb1 += float(nut["ビタミンB1"]) * gram / 100
+        vitb2 += float(nut["ビタミンB2"]) * gram / 100
+        vitc += float(nut["ビタミンC"]) * gram / 100
+        fiber += float(nut["食物繊維"]) * gram / 100
+        salt += float(nut["食塩相当量"]) * gram / 100
+
+    return {
+        "kcal":kcal,
+        "protein":protein,
+        "fat":fat,
+        "carb":carb,
+        "calcium":calcium,
+        "iron":iron,
+        "vitA":vita,
+        "vitE":vite,
+        "vitB1":vitb1,
+        "vitB2":vitb2,
+        "vitC":vitc,
+        "fiber":fiber,
+        "salt":salt
+    }
+
+# =========================
+#meal_logシートを更新する関数
+# =========================
+
+def update_meal_log(meal_id, nut):
+
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_log")
+
+    data = sheet.get_all_values()
+
+    for i,row in enumerate(data):
+
+        if str(row[0]) == str(meal_id):
+
+            sheet.update_cell(i+1,5,nut["kcal"])
+            sheet.update_cell(i+1,6,nut["protein"])
+            sheet.update_cell(i+1,7,nut["fat"])
+            sheet.update_cell(i+1,8,nut["carb"])
+            sheet.update_cell(i+1,9,nut["calcium"])
+            sheet.update_cell(i+1,10,nut["iron"])
+            sheet.update_cell(i+1,11,nut["vitA"])
+            sheet.update_cell(i+1,12,nut["vitE"])
+            sheet.update_cell(i+1,13,nut["vitB1"])
+            sheet.update_cell(i+1,14,nut["vitB2"])
+            sheet.update_cell(i+1,15,nut["vitC"])
+            sheet.update_cell(i+1,16,nut["fiber"])
+            sheet.update_cell(i+1,17,nut["salt"])
+
+            break
 
 # =========================
 # 画面管理（遷移）
@@ -421,7 +487,8 @@ def show_meal_add():
         if st.button("検索"):
     
             words = [w for w in words if w]
-    
+            
+    #nutritionからワードを含む言葉を探しデータで返す（辞書、keyは検索したワード）
             results = search_foods(words)
     
             st.session_state.search_results = results
@@ -492,6 +559,7 @@ def show_meal_add():
                 step=10,
                 key=f"amt_{i}"
             )
+            st.session_state[f"{url}_{ing['name']}_gram"] = amount
     
             ratio = amount / 100
     
@@ -508,38 +576,43 @@ def show_meal_add():
             results.append((food,amount))
     
         if st.button("完了"):
-    
+        
             for food,amount in results:
-    
-                ratio = amount / 100
-    
-                save_meal_log(
+        
+                ingredients = [{
+                    "food": food["食材"],
+                    "gram": amount
+                }]
+        
+                meal_id = save_meal_log_base(
                     st.session_state.selected_date,
                     st.session_state.meal_type,
-                    food["食材"],
-                    safe_float(food["エネルギー"]) * ratio,
-                    safe_float(food["たんぱく質"]) * ratio,
-                    safe_float(food["脂質"]) * ratio,
-                    safe_float(food["炭水化物"]) * ratio,
-                    safe_float(food["カルシウム"]) * ratio,
-                    safe_float(food["鉄"]) * ratio,
-                    safe_float(food["ビタミンA"]) * ratio,
-                    safe_float(food["ビタミンE"]) * ratio,
-                    safe_float(food["ビタミンB1"]) * ratio,
-                    safe_float(food["ビタミンB2"]) * ratio,
-                    safe_float(food["ビタミンC"]) * ratio,
-                    safe_float(food["食物繊維"]) * ratio,
-                    safe_float(food["食塩相当量"]) * ratio
+                    food["食材"]   # ← レシピ欄に食材名
                 )
-    
+        
+                save_ingredients(
+                    meal_id,
+                    ingredients
+                )
+        
+                nut = calc_nutrition(
+                    ingredients,
+                    load_food_master().set_index("食材").to_dict("index")
+                )
+        
+                update_meal_log(
+                    meal_id,
+                    nut
+                )
+        
             st.success("登録しました")
-    
+        
             st.session_state.search_step = 0
             st.session_state.selected_foods_temp = []
             st.session_state.search_results = {}
-    
+        
             load_meal_log.clear()
-    
+        
             st.rerun()
 
 
@@ -640,7 +713,7 @@ def show_recipe_search():
         return mapping
     
     # =========================
-    # 栄養データ読み込み
+    # 栄養データ読み込み、辞書化
     # =========================
     @st.cache_data
     def load_nutrition():
@@ -898,6 +971,10 @@ def show_recipe_search():
                 return count * float(gram_per_unit)
     
         return 0.0
+
+    
+
+
     
     # =========================
     # 水や少々を除外する関数
@@ -1231,58 +1308,47 @@ def show_recipe_search():
     
     
             if st.button("📌 レシピとして追加", key=f"save_{url}"):
+
                 meal = st.session_state.meal_type
-
-                if "meal_data" not in st.session_state:
-                    st.session_state.meal_data = {
-                        "朝食": [],
-                        "昼食": [],
-                        "夕食": []
-                    }
+                date = st.session_state.selected_date
             
-                recipe = {
-                    "title": title,
-                    "kcal": per_person_kcal,
-                    "protein": per_person_protein,
-                    "fat": per_person_fat,
-                    "carb": per_person_carb,
-                    "calcium": per_person_calcium,
-                    "iron": per_person_iron,
-                    "vitA": per_person_vita,
-                    "vitE": per_person_vite,
-                    "vitB1": per_person_vitb1,
-                    "vitB2": per_person_vitb2,
-                    "vitC": per_person_vitc,
-                    "fiber": per_person_fiber,
-                    "salt": per_person_salt
-                }
+                ingredients_for_save = []
             
-                st.session_state.meal_data[meal].append(recipe)
-                
-
-                           
-                save_meal_log(
-                    st.session_state.selected_date,
+                for ing_name, food in st.session_state.selected_foods[url].items():
+            
+                    gram = st.session_state.get(f"{url}_{ing_name}_gram",0)
+            
+                    ingredients_for_save.append({
+                        "food":food,
+                        "gram":gram
+                    })
+            
+                meal_id = save_meal_log_base(
+                    date,
                     meal,
-                    title,
-                    per_person_kcal,
-                    per_person_protein,
-                    per_person_fat,
-                    per_person_carb,
-                    per_person_calcium,
-                    per_person_iron,
-                    per_person_vita,
-                    per_person_vite,
-                    per_person_vitb1,
-                    per_person_vitb2,
-                    per_person_vitc,
-                    per_person_fiber,
-                    per_person_salt
+                    title
                 )
-
+            
+                save_ingredients(
+                    meal_id,
+                    ingredients_for_save
+                )
+            
+                nut = calc_nutrition(
+                    ingredients_for_save,
+                    nutrition_dict
+                )
+            
+                update_meal_log(
+                    meal_id,
+                    nut
+                )
+            
                 load_meal_log.clear()
             
-                st.success(f"{meal}に追加しました")
+                st.success("保存しました")
+
+                
 
                 def save_all_to_gsheet(selected_items_list):
                     """
@@ -1392,38 +1458,42 @@ def show_recipe_search():
         
             recipes = st.session_state.get("recipes_current_page", {})
         
-            client = connect_gsheet()
-            sheet = client.open("food_mapping").worksheet("meal_log")
+            for url, r in recipes.items():
         
-            rows_to_save = []
+                ingredients_for_save = []
         
-            for r in recipes.values():
-                
-                # gsheet保存用
-                rows_to_save.append([
-                    str(date),
+                for ing_name, food in st.session_state.selected_foods.get(url, {}).items():
+        
+                    gram = st.session_state.get(f"{url}_{ing_name}_gram",0)
+        
+                    ingredients_for_save.append({
+                        "food": food,
+                        "gram": gram
+                    })
+        
+                meal_id = save_meal_log_base(
+                    date,
                     meal,
-                    r["title"],
-                    r["kcal"],
-                    r["protein"],
-                    r["fat"],
-                    r["carb"],
-                    r["calcium"],
-                    r["iron"],
-                    r["vitA"],
-                    r["vitE"],
-                    r["vitB1"],
-                    r["vitB2"],
-                    r["vitC"],
-                    r["fiber"],
-                    r["salt"]
-                ])
+                    r["title"]
+                )
         
-            # ⭐ 一括保存（高速）
-            if rows_to_save:
-                sheet.append_rows(rows_to_save)
+                save_ingredients(
+                    meal_id,
+                    ingredients_for_save
+                )
+        
+                nut = calc_nutrition(
+                    ingredients_for_save,
+                    nutrition_dict
+                )
+        
+                update_meal_log(
+                    meal_id,
+                    nut
+                )
         
             load_meal_log.clear()
+        
             st.session_state.recipes_current_page = {}
         
             st.success(f"{meal}に{len(recipes)}レシピ追加しました")
@@ -1460,6 +1530,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
