@@ -99,7 +99,10 @@ def calc_nutrition(ingredients, nutrition_dict):
         food = ing["food"]
         gram = ing["gram"]
 
-        nut = nutrition_dict[food]
+        nut = nutrition_dict.get(food)
+        
+        if not nut:
+            continue
 
         kcal += float(nut["エネルギー"]) * gram / 100
         protein += float(nut["たんぱく質"]) * gram / 100
@@ -1233,6 +1236,8 @@ def show_recipe_search():
                             step=1,
                             key=f"{url}_{i}_{ing['name']}_amt_{multiplier}_{item_multiplier}"
                         )
+
+                    st.session_state[f"{url}_{ing['name']}_gram"] = amount
     
                     
                     if url not in st.session_state.selected_foods:
@@ -1530,6 +1535,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
