@@ -676,15 +676,15 @@ def show_recipe_search():
     if "manual_recipe_words" not in st.session_state:
         st.session_state.manual_recipe_words = []
     
-    if "recipe_keyword_input" not in st.session_state:
-        st.session_state.recipe_keyword_input = ""
+    if "recipe_input_counter" not in st.session_state:
+        st.session_state.recipe_input_counter = 0
     
     st.title("デリッシュ献立スクショ → 栄養計算")
     
     if st.button("←戻る"):
         st.session_state.recipes_current_page = {}
         st.session_state.manual_recipe_words = []
-        st.session_state.recipe_keyword_input = ""
+        st.session_state.recipe_input_counter = 0
         st.session_state.page = "meal_add"
         st.rerun()
 
@@ -1085,12 +1085,13 @@ def show_recipe_search():
     # -------------------------
     st.subheader("手動で検索ワードを追加")
     
+    input_key = f"recipe_keyword_input_box_{st.session_state.recipe_input_counter}"
     col1, col2 = st.columns([3, 1])
     
     with col1:
         keyword = st.text_input(
             "キーワード入力",
-            key="recipe_keyword_input_box"
+            key=input_key
         )
     
     with col2:
@@ -1098,6 +1099,7 @@ def show_recipe_search():
             kw = keyword.strip()
             if kw:
                 st.session_state.manual_recipe_words.append(kw)
+                st.session_state.recipe_input_counter += 1
                 st.rerun()
     
     # 追加済みワード表示
@@ -1152,8 +1154,7 @@ def show_recipe_search():
     
             url = search_recipe(t)
             urls.append(url)
-    
-            st.write(f"検索ワード: {t}")
+
             st.write(url)
     
     
@@ -1602,6 +1603,8 @@ def show_recipe_search():
 
         if st.button("←topに戻る"):
             st.session_state.recipes_current_page = {}
+            st.session_state.manual_recipe_words = []
+            st.session_state.recipe_input_counter = 0
             st.session_state.page = "dashboard"
             st.rerun()
 
@@ -1618,6 +1621,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
