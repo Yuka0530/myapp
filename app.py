@@ -1090,15 +1090,14 @@ def show_recipe_search():
     with col1:
         keyword = st.text_input(
             "キーワード入力",
-            key="recipe_keyword_input"
+            key="recipe_keyword_input_box"
         )
     
     with col2:
         if st.button("検索ワード追加"):
-            kw = st.session_state.recipe_keyword_input.strip()
+            kw = keyword.strip()
             if kw:
                 st.session_state.manual_recipe_words.append(kw)
-                st.session_state.recipe_keyword_input = ""
                 st.rerun()
     
     # 追加済みワード表示
@@ -1619,6 +1618,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
