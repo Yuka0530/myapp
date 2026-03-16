@@ -60,7 +60,7 @@ def load_meal_log():
 #meal_logシートに保存する関数
 # =========================
 
-def save_meal_log_base(date, meal_type, recipe):
+def save_meal_log_base(date, meal_type, recipe, servings=1):
 
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
@@ -73,7 +73,8 @@ def save_meal_log_base(date, meal_type, recipe):
         new_id,
         str(date),
         meal_type,
-        recipe
+        recipe,
+        servings   # ←追加
     ])
 
     return new_id
@@ -110,7 +111,7 @@ def calc_nutrition(ingredients, nutrition_dict):
         if not nut:
             continue
 
-        st.write(ing)
+        #st.write(ing)
 
         kcal += safe_float(nut["エネルギー"]) * gram / 100
         protein += safe_float(nut["たんぱく質"]) * gram / 100
@@ -142,6 +143,26 @@ def calc_nutrition(ingredients, nutrition_dict):
         "salt":salt
     }
 
+def divide_nutrition(nut, servings):
+    if not servings or servings == 0:
+        servings = 1
+
+    return {
+        "kcal": nut["kcal"] / servings,
+        "protein": nut["protein"] / servings,
+        "fat": nut["fat"] / servings,
+        "carb": nut["carb"] / servings,
+        "calcium": nut["calcium"] / servings,
+        "iron": nut["iron"] / servings,
+        "vitA": nut["vitA"] / servings,
+        "vitE": nut["vitE"] / servings,
+        "vitB1": nut["vitB1"] / servings,
+        "vitB2": nut["vitB2"] / servings,
+        "vitC": nut["vitC"] / servings,
+        "fiber": nut["fiber"] / servings,
+        "salt": nut["salt"] / servings
+    }
+
 # =========================
 #meal_logシートを更新する関数
 # =========================
@@ -153,23 +174,23 @@ def update_meal_log(meal_id, nut):
 
     data = sheet.get_all_values()
 
-    for i,row in enumerate(data):
+    for i, row in enumerate(data):
 
         if str(row[0]) == str(meal_id):
 
-            sheet.update_cell(i+1,5,nut["kcal"])
-            sheet.update_cell(i+1,6,nut["protein"])
-            sheet.update_cell(i+1,7,nut["fat"])
-            sheet.update_cell(i+1,8,nut["carb"])
-            sheet.update_cell(i+1,9,nut["calcium"])
-            sheet.update_cell(i+1,10,nut["iron"])
-            sheet.update_cell(i+1,11,nut["vitA"])
-            sheet.update_cell(i+1,12,nut["vitE"])
-            sheet.update_cell(i+1,13,nut["vitB1"])
-            sheet.update_cell(i+1,14,nut["vitB2"])
-            sheet.update_cell(i+1,15,nut["vitC"])
-            sheet.update_cell(i+1,16,nut["fiber"])
-            sheet.update_cell(i+1,17,nut["salt"])
+            sheet.update_cell(i+1, 6, nut["kcal"])
+            sheet.update_cell(i+1, 7, nut["protein"])
+            sheet.update_cell(i+1, 8, nut["fat"])
+            sheet.update_cell(i+1, 9, nut["carb"])
+            sheet.update_cell(i+1, 10, nut["calcium"])
+            sheet.update_cell(i+1, 11, nut["iron"])
+            sheet.update_cell(i+1, 12, nut["vitA"])
+            sheet.update_cell(i+1, 13, nut["vitE"])
+            sheet.update_cell(i+1, 14, nut["vitB1"])
+            sheet.update_cell(i+1, 15, nut["vitB2"])
+            sheet.update_cell(i+1, 16, nut["vitC"])
+            sheet.update_cell(i+1, 17, nut["fiber"])
+            sheet.update_cell(i+1, 18, nut["salt"])
 
             break
 
@@ -570,7 +591,6 @@ def show_meal_add():
                 step=10,
                 key=f"amt_{i}"
             )
-            st.session_state[f"{url}_{ing['name']}_gram"] = amount
     
             ratio = amount / 100
     
@@ -594,7 +614,8 @@ def show_meal_add():
                 meal_id = save_meal_log_base(
                     st.session_state.selected_date,
                     st.session_state.meal_type,
-                    food["食材"]   # ← レシピ欄に食材名
+                    food["食材"],
+                    servings=1
                 )
         
                 save_ingredients(
@@ -1298,6 +1319,7 @@ def show_recipe_search():
             #この画面のレシピすべて追加用にappend
             st.session_state.recipes_current_page[url] = {
                 "title": title,
+                "servings": servings_selected,
                 "kcal": per_person_kcal,
                 "protein": per_person_protein,
                 "fat": per_person_fat,
@@ -1335,22 +1357,25 @@ def show_recipe_search():
                 meal_id = save_meal_log_base(
                     date,
                     meal,
-                    title
+                    title,
+                    servings=servings_selected
                 )
-            
+                
                 save_ingredients(
                     meal_id,
                     ingredients_for_save
                 )
-            
-                nut = calc_nutrition(
+                
+                total_nut = calc_nutrition(
                     ingredients_for_save,
                     nutrition_dict
                 )
-            
+                
+                per_person_nut = divide_nutrition(total_nut, servings_selected)
+                
                 update_meal_log(
                     meal_id,
-                    nut
+                    per_person_nut
                 )
             
                 load_meal_log.clear()
@@ -1483,22 +1508,25 @@ def show_recipe_search():
                 meal_id = save_meal_log_base(
                     date,
                     meal,
-                    r["title"]
+                    r["title"],
+                    servings=r["servings"]
                 )
-        
+                
                 save_ingredients(
                     meal_id,
                     ingredients_for_save
                 )
-        
-                nut = calc_nutrition(
+                
+                total_nut = calc_nutrition(
                     ingredients_for_save,
                     nutrition_dict
                 )
-        
+                
+                per_person_nut = divide_nutrition(total_nut, r["servings"])
+                
                 update_meal_log(
                     meal_id,
-                    nut
+                    per_person_nut
                 )
         
             load_meal_log.clear()
@@ -1539,103 +1567,4 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
