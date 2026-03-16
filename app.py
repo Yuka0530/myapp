@@ -1274,12 +1274,12 @@ def show_recipe_search():
                     fiber += safe_float(nut["食物繊維"]) * amount / 100
                     salt += safe_float(nut["食塩相当量"]) * amount / 100
     
-                    st.write(f"👉 {kcal:.1f} kcal")
+                    st.write(f"👉 {safe_float(nut["エネルギー"]) * amount / 100:.1f} kcal")
                     total_cal += kcal
     
             st.divider()
-            st.subheader(f"合計カロリー: {total_cal:.1f} kcal")
-            per_person = total_cal / servings_selected
+            st.subheader(f"合計カロリー: {kcal:.1f} kcal")
+            per_person = kcal / servings_selected
 
             per_person_kcal = kcal / servings_selected
             per_person_protein = protein / servings_selected
@@ -1539,6 +1539,7 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
 
