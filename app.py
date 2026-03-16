@@ -794,7 +794,7 @@ def show_recipe_search():
         titles = []
     
         coords = [
-        (220,240,820,320),
+        (220,240,820,340),
         (220,480,820,570),
         (220,700,820,810),
         (220,930,820,1020)
@@ -1567,4 +1567,5 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
