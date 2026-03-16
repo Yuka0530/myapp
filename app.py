@@ -672,11 +672,19 @@ def show_recipe_search():
         st.session_state.selected_foods = {}
         st.session_state.ingredients = []
         st.session_state.recipe_page_init = True
+
+    if "manual_recipe_words" not in st.session_state:
+        st.session_state.manual_recipe_words = []
+    
+    if "recipe_keyword_input" not in st.session_state:
+        st.session_state.recipe_keyword_input = ""
     
     st.title("デリッシュ献立スクショ → 栄養計算")
     
     if st.button("←戻る"):
         st.session_state.recipes_current_page = {}
+        st.session_state.manual_recipe_words = []
+        st.session_state.recipe_keyword_input = ""
         st.session_state.page = "meal_add"
         st.rerun()
 
@@ -1065,34 +1073,78 @@ def show_recipe_search():
     # アプリ
     ############################
     
-    file = st.file_uploader("スクショアップ",type=["png","jpg","jpeg"])
     
+    file = st.file_uploader("スクショアップ", type=["png", "jpg", "jpeg"])
+    
+    st.header("①タイトル抽出 / 手動入力")
+    
+    titles = []
+    
+    # -------------------------
+    # 手動入力エリア
+    # -------------------------
+    st.subheader("手動で検索ワードを追加")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        keyword = st.text_input(
+            "キーワード入力",
+            key="recipe_keyword_input"
+        )
+    
+    with col2:
+        if st.button("検索ワード追加"):
+            kw = st.session_state.recipe_keyword_input.strip()
+            if kw:
+                st.session_state.manual_recipe_words.append(kw)
+                st.session_state.recipe_keyword_input = ""
+                st.rerun()
+    
+    # 追加済みワード表示
+    if st.session_state.manual_recipe_words:
+        st.write("追加済み検索ワード")
+        for idx, word in enumerate(st.session_state.manual_recipe_words):
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                st.write(f"・{word}")
+            with c2:
+                if st.button("削除", key=f"delete_manual_word_{idx}"):
+                    st.session_state.manual_recipe_words.pop(idx)
+                    st.rerun()
+    
+    # 手動入力ワードを titles に追加
+    titles.extend(st.session_state.manual_recipe_words)
+    
+    # -------------------------
+    # OCRエリア
+    # -------------------------
     if file:
-    
         pil_img = Image.open(file).convert("RGB")
     
-        st.image(pil_img,width=400)
+        st.image(pil_img, width=400)
     
         img = np.array(pil_img)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     
-        st.header("①タイトル抽出")
+        st.subheader("スクショからタイトル抽出")
     
         title_imgs = crop_titles(img)
     
-        titles=[]
-    
-        for i,t in enumerate(title_imgs):
-    
+        for i, t in enumerate(title_imgs):
             text = read_title(t)
     
-            titles.append(text)
+            if text.strip():
+                titles.append(text)
     
-            st.image(t,width=300)
-    
+            st.image(t, width=300)
             st.write(text)
     
+    # 重複削除
+    titles = [t.strip() for t in titles if str(t).strip()]
+    titles = list(dict.fromkeys(titles))
     
+    if titles:
         st.header("②レシピURL取得")
     
         urls=[]
@@ -1100,9 +1152,9 @@ def show_recipe_search():
         for t in titles:
     
             url = search_recipe(t)
-    
             urls.append(url)
     
+            st.write(f"検索ワード: {t}")
             st.write(url)
     
     
@@ -1567,5 +1619,6 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
 
 
