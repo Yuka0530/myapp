@@ -1124,12 +1124,11 @@ def show_recipe_search():
         if unit_match and food_name and nutrition_dict:
     
             count = float(unit_match.group(1))
-            st.write(count)
-    
+        
             if food_name in nutrition_dict:
     
                 gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
-                st.write(gram_per_unit)
+                
                 if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
                     return 0.0
         
