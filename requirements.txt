@@ -11,4 +11,4 @@ ipywidgets
 gspread
 google-auth
 plotly
-
+uuid
