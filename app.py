@@ -14,6 +14,7 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
+import uuid
 
 # =========================
 # Google Sheets 接続
@@ -230,6 +231,7 @@ def get_meal_ingredients_by_id(meal_id):
     ingredients = []
     for _, r in rows.iterrows():
         ingredients.append({
+            "uid": str(uuid.uuid4()),
             "food": r["food"],
             "gram": safe_float(r["gram"])
         })
@@ -1117,15 +1119,17 @@ def show_recipe_search():
                 return count * float(gram_per_unit)
         
         unit_match = re.search(r'(\d+(?:\.\d+)?)', text)
+        #st.write(unit_match)
     
         if unit_match and food_name and nutrition_dict:
     
             count = float(unit_match.group(1))
+            st.write(count)
     
             if food_name in nutrition_dict:
     
                 gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
-    
+                st.write(gram_per_unit)
                 if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
                     return 0.0
         
@@ -1418,6 +1422,7 @@ def show_recipe_search():
                         st.error("見つかりません")
     
                 #st.write("selected:", selected)
+                
                 if selected:
                     
                     default_g = parse_amount(
@@ -1808,7 +1813,7 @@ def show_saved_meal_edit():
         return
 
     row = row_df.iloc[0]
-    nutrition_dict = load_nutrition_dict()
+    nutrition_dict = load_nutrition()
     food_master = list(nutrition_dict.keys())
 
     edit_key = f"edit_ingredients_{meal_id}"
@@ -1823,37 +1828,109 @@ def show_saved_meal_edit():
         value=int(float(row["servings"])) if str(row["servings"]).strip() else 1
     )
 
+    delete_key = f"delete_target_{meal_id}"
+
+    if delete_key not in st.session_state:
+        st.session_state[delete_key] = None
+
+    # 前回押された削除をここで実行
+    if st.session_state[delete_key] is not None:
+        delete_uid = st.session_state[delete_key]
+
+        st.session_state[edit_key] = [
+            ing for ing in st.session_state[edit_key]
+            if ing["uid"] != delete_uid
+        ]
+
+        st.session_state[delete_key] = None
+        st.rerun()
+
+    def normalize(text):
+        return str(text).replace("\u3000", "").replace(" ", "").strip()
+
     edited_ingredients = []
 
     for i, ing in enumerate(st.session_state[edit_key]):
         st.divider()
         st.write(f"材料 {i+1}")
 
-        selected_food = st.selectbox(
-            f"食材 {i+1}",
-            food_master,
-            index=food_master.index(ing["food"]) if ing["food"] in food_master else 0,
-            key=f"saved_edit_food_{meal_id}_{i}"
+        # 現在値
+        current_food = ing["food"]
+        uid = ing["uid"]
+
+        # 検索ワード入力
+        search_key = f"saved_edit_search_{meal_id}_{uid}"
+        default_search = st.session_state.get(search_key, current_food)
+
+        search_word = st.text_input(
+            f"食材検索 {i+1}",
+            value=default_search,
+            key=search_key
         )
 
-        gram = st.number_input(
-            f"グラム {i+1}",
-            min_value=0.0,
-            step=1.0,
-            value=float(ing["gram"]),
-            key=f"saved_edit_gram_{meal_id}_{i}"
-        )
+        # nutrition_dictから候補検索
+        if search_word.strip():
+            candidates = [
+                food for food in food_master
+                if normalize(search_word) in normalize(food)
+            ]
+        else:
+            candidates = []
+
+        # 候補が0件なら現在の食材だけは候補に残す
+        if current_food not in candidates and current_food in food_master:
+            candidates = [current_food] + candidates
+
+        # 候補が多すぎると見づらいので上位50件まで
+        candidates = candidates[:50]
+
+        if not candidates:
+            st.warning("候補が見つかりません。検索語を変えてください。")
+            selected_food = current_food if current_food in food_master else food_master[0]
+            st.write(f"現在の食材: {selected_food}")
+        else:
+            selected_index = candidates.index(current_food) if current_food in candidates else 0
+
+            selected_food = st.selectbox(
+                f"候補 {i+1}",
+                candidates,
+                index=selected_index,
+                key=f"saved_edit_food_{meal_id}_{uid}"
+            )
+
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            gram = st.number_input(
+                f"グラム {i+1}",
+                min_value=0.0,
+                step=1.0,
+                value=float(ing["gram"]),
+                key=f"saved_edit_gram_{meal_id}_{uid}"
+            )
+
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("削除", key=f"delete_ing_{meal_id}_{uid}"):
+                st.session_state[delete_key] = uid
+                st.rerun()
 
         edited_ingredients.append({
+            "uid": uid,
             "food": selected_food,
             "gram": gram
         })
+
+    if len(st.session_state[edit_key]) == 0:
+        st.info("材料がありません。材料を追加してください。")
 
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("材料を追加"):
             st.session_state[edit_key].append({
+                "uid": str(uuid.uuid4()),
                 "food": food_master[0],
                 "gram": 100.0
             })
@@ -1874,7 +1951,14 @@ def show_saved_meal_edit():
 
     with col1:
         if st.button("保存"):
-            replace_meal_ingredients(meal_id, edited_ingredients)
+            ingredients_to_save = [
+                {
+                    "food": ing["food"],
+                    "gram": ing["gram"]
+                }
+                for ing in edited_ingredients
+    ]
+            replace_meal_ingredients(meal_id, ingredients_to_save)
             update_meal_log_full(
                 meal_id,
                 recipe_name,
@@ -1885,6 +1969,8 @@ def show_saved_meal_edit():
             load_meal_log.clear()
             load_meal_ingredients.clear()
             del st.session_state[edit_key]
+            if delete_key in st.session_state:
+                st.session_state[delete_key] = None
 
             st.success("更新しました")
             st.session_state.page = "saved_meal_confirm"
@@ -1894,6 +1980,8 @@ def show_saved_meal_edit():
         if st.button("キャンセル"):
             if edit_key in st.session_state:
                 del st.session_state[edit_key]
+            if delete_key in st.session_state:
+                st.session_state[delete_key] = None
             st.session_state.page = "saved_meal_confirm"
             st.rerun()
 
