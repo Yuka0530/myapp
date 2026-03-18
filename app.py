@@ -194,12 +194,112 @@ def update_meal_log(meal_id, nut):
 
             break
 
+ # =========================
+#meal_ingredients を読み込む関数
+# =========================       
+@st.cache_data
+def load_meal_ingredients():
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_ingredients")
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
+
+# =========================
+# 栄養データ読み込み、辞書化
+# =========================
+@st.cache_data
+def load_nutrition():
+
+    client = connect_gsheet()
+    sheet = client.open("nutrition").sheet1
+
+    data = sheet.get_all_values()
+
+    df = pd.DataFrame(data[1:], columns=data[0])
+
+    return df.set_index("食材").to_dict(orient="index")
+
+# =========================
+# 保存済み meal_id の材料一覧を取る関数
+# =========================
+def get_meal_ingredients_by_id(meal_id):
+    df = load_meal_ingredients()
+    rows = df[df["meal_id"].astype(str) == str(meal_id)]
+
+    ingredients = []
+    for _, r in rows.iterrows():
+        ingredients.append({
+            "food": r["food"],
+            "gram": safe_float(r["gram"])
+        })
+    return ingredients
+
+# =========================
+# meal_ingredients を更新する関数
+# =========================
+def replace_meal_ingredients(meal_id, ingredients):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_ingredients")
+
+    data = sheet.get_all_values()
+    header = data[0]
+    rows = data[1:]
+
+    new_rows = []
+    for row in rows:
+        if str(row[0]) != str(meal_id):
+            new_rows.append(row)
+
+    for ing in ingredients:
+        new_rows.append([
+            str(meal_id),
+            ing["food"],
+            ing["gram"]
+        ])
+
+    sheet.clear()
+    sheet.append_row(header)
+    if new_rows:
+        sheet.append_rows(new_rows)
+
+# =========================
+# recipe名・servings も更新できる関数
+# =========================
+def update_meal_log_full(meal_id, recipe, servings, nut):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_log")
+
+    data = sheet.get_all_values()
+
+    for i, row in enumerate(data):
+        if str(row[0]) == str(meal_id):
+            sheet.update_cell(i+1, 4, recipe)       # recipe
+            sheet.update_cell(i+1, 5, servings)     # servings
+            sheet.update_cell(i+1, 6, nut["kcal"])
+            sheet.update_cell(i+1, 7, nut["protein"])
+            sheet.update_cell(i+1, 8, nut["fat"])
+            sheet.update_cell(i+1, 9, nut["carb"])
+            sheet.update_cell(i+1, 10, nut["calcium"])
+            sheet.update_cell(i+1, 11, nut["iron"])
+            sheet.update_cell(i+1, 12, nut["vitA"])
+            sheet.update_cell(i+1, 13, nut["vitE"])
+            sheet.update_cell(i+1, 14, nut["vitB1"])
+            sheet.update_cell(i+1, 15, nut["vitB2"])
+            sheet.update_cell(i+1, 16, nut["vitC"])
+            sheet.update_cell(i+1, 17, nut["fiber"])
+            sheet.update_cell(i+1, 18, nut["salt"])
+            break
+
 # =========================
 # 画面管理（遷移）
 # =========================
 
 if "page" not in st.session_state:
     st.session_state.page = "dashboard"
+
+if "edit_meal_id" not in st.session_state:
+    st.session_state.edit_meal_id = None
 
 
 # =========================
@@ -658,6 +758,46 @@ def show_meal_add():
         st.session_state.page = "dashboard"
         st.rerun()
 
+    st.markdown("""
+    <style>
+    .bottom-fixed-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 12px 16px;
+        border-top: 1px solid #ddd;
+        z-index: 9999;
+    }
+    .bottom-spacer {
+        height: 100px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    logs = load_meal_log()
+    target_rows = logs[
+        (logs["date"] == str(st.session_state.selected_date)) &
+        (logs["meal_type"] == st.session_state.meal_type)
+    ]
+
+    total_kcal = pd.to_numeric(target_rows["kcal"], errors="coerce").fillna(0).sum()
+    total_count = len(target_rows)
+
+    st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="bottom-fixed-bar">', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([2, 5])
+    with col1:
+        st.markdown(f"### {total_kcal:.0f} kcal")
+    with col2:
+        if st.button(f"登録を確認 ({total_count})", use_container_width=True, key="go_saved_confirm"):
+            st.session_state.page = "saved_meal_confirm"
+            st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # =========================
 # レシピ検索画面
 # =========================
@@ -673,18 +813,18 @@ def show_recipe_search():
         st.session_state.ingredients = []
         st.session_state.recipe_page_init = True
 
-    if "manual_recipe_words" not in st.session_state:
-        st.session_state.manual_recipe_words = []
-    
-    if "recipe_input_counter" not in st.session_state:
-        st.session_state.recipe_input_counter = 0
+    if "manual_recipe_urls" not in st.session_state:
+        st.session_state.manual_recipe_urls = []
+
+    if "manual_recipe_url_input" not in st.session_state:
+        st.session_state.manual_recipe_url_input = ""
     
     st.title("デリッシュ献立スクショ → 栄養計算")
     
     if st.button("←戻る"):
         st.session_state.recipes_current_page = {}
-        st.session_state.manual_recipe_words = []
-        st.session_state.recipe_input_counter = 0
+        st.session_state.manual_recipe_urls = []
+        st.session_state.manual_recipe_url_input = ""
         st.session_state.page = "meal_add"
         st.rerun()
 
@@ -748,20 +888,7 @@ def show_recipe_search():
     
         return mapping
     
-    # =========================
-    # 栄養データ読み込み、辞書化
-    # =========================
-    @st.cache_data
-    def load_nutrition():
-    
-        client = connect_gsheet()
-        sheet = client.open("nutrition").sheet1
-    
-        data = sheet.get_all_values()
-    
-        df = pd.DataFrame(data[1:], columns=data[0])
-    
-        return df.set_index("食材").to_dict(orient="index")
+
         
     nutrition_dict = load_nutrition()
     
@@ -833,16 +960,14 @@ def show_recipe_search():
     ############################
     @st.cache_data
     def search_recipe(name):
-        st.write(name)
-    
+        #st.write(name)
+
+        # 日本語の料理名をURLで使える形式（%E8%82%89...など）に変換
         query = requests.utils.quote(name)
-    
-        url = f"https://delishkitchen.tv/search?q={query}"
-    
+        url = f"https://delishkitchen.tv/search?q={query}"   
         headers = {"User-Agent":"Mozilla/5.0"}
     
         r = requests.get(url,headers=headers)
-    
         soup = BeautifulSoup(r.text,"html.parser")
     
         for a in soup.select("a"):
@@ -1076,46 +1201,9 @@ def show_recipe_search():
     
     file = st.file_uploader("スクショアップ", type=["png", "jpg", "jpeg"])
     
-    st.header("①タイトル抽出 / 手動入力")
+    st.header("①タイトル抽出")
     
     titles = []
-    
-    # -------------------------
-    # 手動入力エリア
-    # -------------------------
-    st.subheader("手動で検索ワードを追加")
-    
-    input_key = f"recipe_keyword_input_box_{st.session_state.recipe_input_counter}"
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        keyword = st.text_input(
-            "キーワード入力",
-            key=input_key
-        )
-    
-    with col2:
-        if st.button("検索ワード追加"):
-            kw = keyword.strip()
-            if kw:
-                st.session_state.manual_recipe_words.append(kw)
-                st.session_state.recipe_input_counter += 1
-                st.rerun()
-    
-    # 追加済みワード表示
-    if st.session_state.manual_recipe_words:
-        st.write("追加済み検索ワード")
-        for idx, word in enumerate(st.session_state.manual_recipe_words):
-            c1, c2 = st.columns([4, 1])
-            with c1:
-                st.write(f"・{word}")
-            with c2:
-                if st.button("削除", key=f"delete_manual_word_{idx}"):
-                    st.session_state.manual_recipe_words.pop(idx)
-                    st.rerun()
-    
-    # 手動入力ワードを titles に追加
-    titles.extend(st.session_state.manual_recipe_words)
     
     # -------------------------
     # OCRエリア
@@ -1145,19 +1233,66 @@ def show_recipe_search():
     titles = [t.strip() for t in titles if str(t).strip()]
     titles = list(dict.fromkeys(titles))
     
+    ocr_urls = []
+
     if titles:
         st.header("②レシピURL取得")
-    
-        urls=[]
-    
-        for t in titles:
-    
-            url = search_recipe(t)
-            urls.append(url)
 
+        for t in titles:
+            url = search_recipe(t)
+            st.write(f"抽出タイトル: {t}")
             st.write(url)
+
+            if url:
+                ocr_urls.append(url)
+
+    # -------------------------
+    # URL手動追加
+    # -------------------------
+    st.subheader("URLを手動追加")
+
+    if "manual_recipe_urls" not in st.session_state:
+        st.session_state.manual_recipe_urls = []
+
+    if "manual_recipe_url_input_counter" not in st.session_state:
+        st.session_state.manual_recipe_url_input_counter = 0
+
+    url_input_key = f"manual_recipe_url_input_{st.session_state.manual_recipe_url_input_counter}"
     
+    manual_url = st.text_input(
+        "レシピURLを入力",
+        key=url_input_key
+    )
+
+    if st.button("URL追加"):
+        url = manual_url.strip()
+        if url:
+            if "delishkitchen.tv/recipes/" in url:
+                if url not in st.session_state.manual_recipe_urls:
+                    st.session_state.manual_recipe_urls.append(url)
+                    st.session_state.manual_recipe_url_input_counter += 1
+                    st.rerun()
+            else:
+                st.warning("デリッシュキッチンのレシピURLを入力してください")
+            st.session_state.manual_recipe_url_input = ""
+            st.rerun()
+
+    if st.session_state.manual_recipe_urls:
+        st.write("追加済みURL")
+        for idx, url in enumerate(st.session_state.manual_recipe_urls):
+            c1, c2 = st.columns([5, 1])
+            with c1:
+                st.write(url)
+            with c2:
+                if st.button("削除", key=f"delete_manual_url_{idx}"):
+                    st.session_state.manual_recipe_urls.pop(idx)
+                    st.rerun()
+
+    urls = ocr_urls + st.session_state.manual_recipe_urls
+    urls = [u for u in urls if u]
+    urls = list(dict.fromkeys(urls))
     
+    if urls:
         st.header("③材料取得")
     
         total_kcal=0
@@ -1347,7 +1482,7 @@ def show_recipe_search():
                     fiber += safe_float(nut["食物繊維"]) * amount / 100
                     salt += safe_float(nut["食塩相当量"]) * amount / 100
     
-                    st.write(f"👉 {safe_float(nut["エネルギー"]) * amount / 100:.1f} kcal")
+                    st.write(f"👉 {safe_float(nut['エネルギー']) * amount / 100:.1f} kcal")
                     total_cal += kcal
     
             st.divider()
@@ -1603,11 +1738,164 @@ def show_recipe_search():
 
         if st.button("←topに戻る"):
             st.session_state.recipes_current_page = {}
-            st.session_state.manual_recipe_words = []
-            st.session_state.recipe_input_counter = 0
+            st.session_state.manual_recipe_urls = []
+            st.session_state.manual_recipe_url_input = ""
             st.session_state.page = "dashboard"
             st.rerun()
 
+#登録内容の確認画面
+def show_saved_meal_confirm():
+    st.title("登録内容の確認")
+
+    logs = load_meal_log()
+
+    rows = logs[
+        (logs["date"] == str(st.session_state.selected_date)) &
+        (logs["meal_type"] == st.session_state.meal_type)
+    ].copy()
+
+    if rows.empty:
+        st.info("まだ登録がありません")
+
+        if st.button("← 戻る"):
+            st.session_state.page = "meal_add"
+            st.rerun()
+        return
+
+    rows["kcal_num"] = pd.to_numeric(rows["kcal"], errors="coerce").fillna(0)
+
+    st.subheader(f"{st.session_state.selected_date} {st.session_state.meal_type}")
+    st.write(f"合計 {rows['kcal_num'].sum():.1f} kcal")
+
+    for _, r in rows.iterrows():
+        col1, col2 = st.columns([5, 1])
+
+        with col1:
+            st.write(f"**{r['recipe']}**")
+            st.caption(f"{r['kcal_num']:.1f} kcal")
+
+        with col2:
+            if st.button("編集", key=f"edit_saved_{r['id']}"):
+                st.session_state.edit_meal_id = r["id"]
+                st.session_state.page = "saved_meal_edit"
+                st.rerun()
+
+    if st.button("← 戻る"):
+        st.session_state.page = "meal_add"
+        st.rerun()
+
+
+#登録完了したレシピの編集画面
+def show_saved_meal_edit():
+    st.title("登録内容を編集")
+
+    meal_id = st.session_state.get("edit_meal_id")
+    if meal_id is None:
+        st.warning("編集対象がありません")
+        if st.button("← 戻る"):
+            st.session_state.page = "saved_meal_confirm"
+            st.rerun()
+        return
+
+    logs = load_meal_log()
+    row_df = logs[logs["id"].astype(str) == str(meal_id)]
+
+    if row_df.empty:
+        st.error("対象データが見つかりません")
+        if st.button("← 戻る"):
+            st.session_state.page = "saved_meal_confirm"
+            st.rerun()
+        return
+
+    row = row_df.iloc[0]
+    nutrition_dict = load_nutrition_dict()
+    food_master = list(nutrition_dict.keys())
+
+    edit_key = f"edit_ingredients_{meal_id}"
+    if edit_key not in st.session_state:
+        st.session_state[edit_key] = get_meal_ingredients_by_id(meal_id)
+
+    recipe_name = st.text_input("料理名", value=row["recipe"])
+    servings = st.number_input(
+        "人数",
+        min_value=1,
+        step=1,
+        value=int(float(row["servings"])) if str(row["servings"]).strip() else 1
+    )
+
+    edited_ingredients = []
+
+    for i, ing in enumerate(st.session_state[edit_key]):
+        st.divider()
+        st.write(f"材料 {i+1}")
+
+        selected_food = st.selectbox(
+            f"食材 {i+1}",
+            food_master,
+            index=food_master.index(ing["food"]) if ing["food"] in food_master else 0,
+            key=f"saved_edit_food_{meal_id}_{i}"
+        )
+
+        gram = st.number_input(
+            f"グラム {i+1}",
+            min_value=0.0,
+            step=1.0,
+            value=float(ing["gram"]),
+            key=f"saved_edit_gram_{meal_id}_{i}"
+        )
+
+        edited_ingredients.append({
+            "food": selected_food,
+            "gram": gram
+        })
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("材料を追加"):
+            st.session_state[edit_key].append({
+                "food": food_master[0],
+                "gram": 100.0
+            })
+            st.rerun()
+
+    with col2:
+        if len(st.session_state[edit_key]) > 1:
+            if st.button("最後の材料を削除"):
+                st.session_state[edit_key].pop()
+                st.rerun()
+
+    preview_total_nut = calc_nutrition(edited_ingredients, nutrition_dict)
+    preview_per_person = divide_nutrition(preview_total_nut, servings)
+
+    st.subheader(f"1人分 {preview_per_person['kcal']:.1f} kcal")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("保存"):
+            replace_meal_ingredients(meal_id, edited_ingredients)
+            update_meal_log_full(
+                meal_id,
+                recipe_name,
+                servings,
+                preview_per_person
+            )
+
+            load_meal_log.clear()
+            load_meal_ingredients.clear()
+            del st.session_state[edit_key]
+
+            st.success("更新しました")
+            st.session_state.page = "saved_meal_confirm"
+            st.rerun()
+
+    with col2:
+        if st.button("キャンセル"):
+            if edit_key in st.session_state:
+                del st.session_state[edit_key]
+            st.session_state.page = "saved_meal_confirm"
+            st.rerun()
 
 
 if st.session_state.page == "dashboard":
@@ -1616,12 +1904,17 @@ if st.session_state.page == "dashboard":
 elif st.session_state.page == "meal_add":
     show_meal_add()
 
+elif st.session_state.page == "saved_meal_confirm":
+    show_saved_meal_confirm()
+
+elif st.session_state.page == "saved_meal_edit":
+    show_saved_meal_edit()
+
 elif st.session_state.page == "recipe_search":
     show_recipe_search()
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
-
 
 
 
