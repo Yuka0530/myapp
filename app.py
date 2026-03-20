@@ -1798,7 +1798,7 @@ def show_recipe_search():
                     rows_to_append = []
                     
                     for original, selected in selected_items_list:
-                        st.write(original,selected)
+                        
                         found = False
                         # 既存データにあるか確認（ここをループ内で回すと重いですが、API通信よりはマシです）
                         for i, row in enumerate(all_data[1:], start=2):
@@ -1820,8 +1820,11 @@ def show_recipe_search():
 
                 # 保存したいデータを一旦リストにまとめる
                 items_to_save = []
-                for original, selected in st.session_state.selected_foods.get(url, {}).items():
-                    items_to_save.append((original, selected))
+                for uid, item in st.session_state.selected_foods.get(url, {}).items():
+                    items_to_save.append((
+                        item["original_name"],
+                        item["selected_food"]
+                    ))
                 
                 # まとめて一回だけ関数を呼ぶ！
                 save_all_to_gsheet(items_to_save)
@@ -1937,8 +1940,11 @@ def show_recipe_search():
             # 1. 保存したいデータをすべて一つのリストに集める
             all_items = []
             for url_key in st.session_state.selected_foods:
-                for original, selected in st.session_state.selected_foods[url_key].items():
-                    all_items.append((original, selected))
+                for uid, item in st.session_state.selected_foods[url_key].items():
+                    all_items.append((
+                        item["original_name"],
+                        item["selected_food"]
+                    ))
             
             # 2. まとめて保存関数を1回だけ呼ぶ
             if all_items:
