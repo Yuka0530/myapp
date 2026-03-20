@@ -266,6 +266,19 @@ def replace_meal_ingredients(meal_id, ingredients):
         sheet.append_rows(new_rows)
 
 # =========================
+# meal_id から1件の meal_log を取る関数
+# =========================        
+
+def get_meal_log_by_id(meal_id):
+    logs = load_meal_log()
+    row_df = logs[logs["id"].astype(str) == str(meal_id)]
+
+    if row_df.empty:
+        return None
+
+    return row_df.iloc[0].to_dict()
+
+# =========================
 # recipe名・servings も更新できる関数
 # =========================
 def update_meal_log_full(meal_id, recipe, servings, nut):
@@ -292,6 +305,53 @@ def update_meal_log_full(meal_id, recipe, servings, nut):
             sheet.update_cell(i+1, 17, nut["fiber"])
             sheet.update_cell(i+1, 18, nut["salt"])
             break
+
+# =========================
+# 過去履歴を複製して登録する関数
+# =========================
+
+def copy_meal_from_history(source_meal_id, target_date, target_meal_type):
+    source_log = get_meal_log_by_id(source_meal_id)
+    if source_log is None:
+        return False
+
+    source_ingredients = get_meal_ingredients_by_id(source_meal_id)
+
+    # 新しい meal_log を作成
+    new_meal_id = save_meal_log_base(
+        target_date,
+        target_meal_type,
+        source_log["recipe"],
+        servings=safe_float(source_log.get("servings", 1)) or 1
+    )
+
+    # 材料コピー
+    ingredients_to_save = []
+    for ing in source_ingredients:
+        ingredients_to_save.append({
+            "food": ing["food"],
+            "gram": safe_float(ing["gram"])
+        })
+
+    save_ingredients(new_meal_id, ingredients_to_save)
+
+    # 栄養は再計算
+    nutrition_dict = load_nutrition()
+    total_nut = calc_nutrition(ingredients_to_save, nutrition_dict)
+
+    servings = safe_float(source_log.get("servings", 1)) or 1
+    per_person_nut = divide_nutrition(total_nut, servings)
+
+    update_meal_log_full(
+        new_meal_id,
+        source_log["recipe"],
+        servings,
+        per_person_nut
+    )
+
+    load_meal_log.clear()
+    load_meal_ingredients.clear()
+    return True
 
 # =========================
 # 画面管理（遷移）
@@ -596,6 +656,9 @@ def show_meal_add():
     
     if "selected_foods_temp" not in st.session_state:
         st.session_state.selected_foods_temp = []
+
+    if "history_filter_mode" not in st.session_state:
+        st.session_state.history_filter_mode = "meal_type"
     
     # =========================
     # 1検索バー
@@ -750,6 +813,74 @@ def show_meal_add():
     if st.button("レシピサイトを検索"):
         st.session_state.page = "recipe_search"
         st.rerun()
+
+    #履歴表示
+    st.divider()
+    st.subheader("登録履歴から追加")
+
+    col_hist1, col_hist2 = st.columns(2)
+
+    with col_hist1:
+        if st.button(f"{st.session_state.meal_type}の履歴", use_container_width=True):
+            st.session_state.history_filter_mode = "meal_type"
+            st.rerun()
+
+    with col_hist2:
+        if st.button("すべての履歴", use_container_width=True):
+            st.session_state.history_filter_mode = "all"
+            st.rerun()
+
+    logs = load_meal_log().copy()
+
+    # 数値列を安全変換
+    if "kcal" in logs.columns:
+        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
+    else:
+        logs["kcal_num"] = 0
+
+    # フィルター
+    if st.session_state.history_filter_mode == "meal_type":
+        history_rows = logs[
+            logs["meal_type"] == st.session_state.meal_type
+        ].copy()
+    else:
+        history_rows = logs.copy()
+
+    # 新しい順に並べる
+    if "id" in history_rows.columns:
+        history_rows["id_num"] = pd.to_numeric(history_rows["id"], errors="coerce").fillna(0)
+        history_rows = history_rows.sort_values("id_num", ascending=False)
+
+    # 同じ recipe が何回も並びすぎるのが嫌なら recipe単位で最新1件だけにする
+    history_rows = history_rows.drop_duplicates(subset=["recipe"], keep="first")
+
+    if history_rows.empty:
+        st.info("履歴がありません")
+    else:
+        for _, r in history_rows.iterrows():
+            col1, col2, col3 = st.columns([4, 2, 1])
+
+            with col1:
+                st.write(f"**{r['recipe']}**")
+                if st.session_state.history_filter_mode == "all":
+                    st.caption(f"{r['meal_type']} / {r['date']}")
+
+            with col2:
+                st.write(f"{safe_float(r['kcal_num']):.0f} kcal")
+
+            with col3:
+                if st.button("＋", key=f"add_history_{r['id']}"):
+                    ok = copy_meal_from_history(
+                        source_meal_id=r["id"],
+                        target_date=st.session_state.selected_date,
+                        target_meal_type=st.session_state.meal_type
+                    )
+
+                    if ok:
+                        st.success("登録しました")
+                        st.rerun()
+                    else:
+                        st.error("履歴の登録に失敗しました")
 
     if st.button("←戻る"):
     
