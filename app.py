@@ -222,6 +222,17 @@ def load_nutrition():
     return df.set_index("食材").to_dict(orient="index")
 
 # =========================
+# nutrition シートを DataFrame で読む関数
+# =========================
+@st.cache_data
+def load_nutrition_df():
+    client = connect_gsheet()
+    sheet = client.open("nutrition").sheet1
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
+
+# =========================
 # 保存済み meal_id の材料一覧を取る関数
 # =========================
 def get_meal_ingredients_by_id(meal_id):
@@ -362,6 +373,9 @@ if "page" not in st.session_state:
 
 if "edit_meal_id" not in st.session_state:
     st.session_state.edit_meal_id = None
+
+if "my_item_edit_name" not in st.session_state:
+    st.session_state.my_item_edit_name = None
 
 
 # =========================
@@ -808,11 +822,18 @@ def show_meal_add():
         
             st.rerun()
 
+    col_a, col_b = st.columns(2)
 
+    with col_a:
+        if st.button("レシピサイトを検索"):
+            st.session_state.page = "recipe_search"
+            st.rerun()
 
-    if st.button("レシピサイトを検索"):
-        st.session_state.page = "recipe_search"
-        st.rerun()
+    with col_b:
+        if st.button("マイアイテム"):
+            st.session_state.page = "my_items"
+            st.rerun()
+
 
     #履歴表示
     st.divider()
@@ -2197,6 +2218,198 @@ def show_saved_meal_edit():
             st.session_state.page = "saved_meal_confirm"
             st.rerun()
 
+#マイアイテムを新規登録
+def save_my_item(item_data):
+    client = connect_gsheet()
+    sheet = client.open("nutrition").sheet1
+
+    headers = sheet.row_values(1)
+
+    row = []
+    for col in headers:
+        row.append(item_data.get(col, 0))
+
+    sheet.append_row(row)
+    load_nutrition.clear()
+    load_nutrition_df.clear()
+
+#マイアイテムを更新
+def update_my_item(original_name, item_data):
+    client = connect_gsheet()
+    sheet = client.open("nutrition").sheet1
+
+    data = sheet.get_all_values()
+    headers = data[0]
+
+    for i, row in enumerate(data[1:], start=2):
+        if len(row) > 0 and row[0] == original_name:
+            new_row = []
+            for col in headers:
+                new_row.append(item_data.get(col, 0))
+
+            cell_range = f"A{i}:{chr(64+len(headers))}{i}"
+            sheet.update(cell_range, [new_row])
+
+            load_nutrition.clear()
+            load_nutrition_df.clear()
+            return True
+
+    return False
+
+#空欄を0にする補助関数
+def empty_to_zero(x):
+    if x is None:
+        return 0
+    if str(x).strip() == "":
+        return 0
+    return safe_float(x)
+
+#マイアイテムだけ取得する関数
+def get_my_items():
+    df = load_nutrition_df().copy()
+
+    if "source" not in df.columns:
+        return pd.DataFrame(columns=df.columns)
+
+    df = df[df["source"] == "my_item"].copy()
+    return df
+
+
+#マイアイテム一覧画面
+def show_my_items():
+    st.title("マイアイテム")
+
+    df = get_my_items()
+
+    keyword = st.text_input("キーワードで絞り込み")
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("登録", use_container_width=True):
+            st.session_state.my_item_edit_name = None
+            st.session_state.page = "my_item_form"
+            st.rerun()
+
+    with col2:
+        if st.button("← 戻る", use_container_width=True):
+            st.session_state.page = "meal_add"
+            st.rerun()
+
+    if keyword.strip():
+        df = df[df["食材"].str.contains(keyword, na=False)]
+
+    if df.empty:
+        st.info("マイアイテムはまだありません")
+        return
+
+    for _, r in df.iterrows():
+        col1, col2, col3 = st.columns([5, 2, 1])
+
+        with col1:
+            st.write(f"**{r['食材']}**")
+
+        with col2:
+            st.write(f"{safe_float(r.get('エネルギー', 0)):.1f} kcal")
+
+        with col3:
+            if st.button("編集", key=f"edit_my_item_{r['食材']}"):
+                st.session_state.my_item_edit_name = r["食材"]
+                st.session_state.page = "my_item_form"
+                st.rerun()
+
+#マイアイテム登録フォーム画面
+def show_my_item_form():
+    st.title("マイアイテム登録")
+
+    nutrition_df = load_nutrition_df()
+    edit_name = st.session_state.get("my_item_edit_name")
+
+    edit_row = None
+    if edit_name:
+        rows = nutrition_df[nutrition_df["食材"] == edit_name]
+        if not rows.empty:
+            edit_row = rows.iloc[0]
+
+    def get_default(col, default=""):
+        if edit_row is None:
+            return default
+        v = edit_row.get(col, default)
+        return v if str(v).strip() != "" else default
+
+    food_name = st.text_input("メニュー名 *", value=get_default("食材", ""))
+
+    kcal = st.text_input("100gあたりカロリー *", value=get_default("エネルギー", ""))
+    protein = st.text_input("たんぱく質", value=get_default("たんぱく質", ""))
+    fat = st.text_input("脂質", value=get_default("脂質", ""))
+    carb = st.text_input("炭水化物", value=get_default("炭水化物", ""))
+    calcium = st.text_input("カルシウム", value=get_default("カルシウム", ""))
+    iron = st.text_input("鉄", value=get_default("鉄", ""))
+    vitA = st.text_input("ビタミンA", value=get_default("ビタミンA", ""))
+    vitE = st.text_input("ビタミンE", value=get_default("ビタミンE", ""))
+    vitB1 = st.text_input("ビタミンB1", value=get_default("ビタミンB1", ""))
+    vitB2 = st.text_input("ビタミンB2", value=get_default("ビタミンB2", ""))
+    vitC = st.text_input("ビタミンC", value=get_default("ビタミンC", ""))
+    fiber = st.text_input("食物繊維", value=get_default("食物繊維", ""))
+    salt = st.text_input("食塩相当量", value=get_default("食塩相当量", ""))
+    unit_g = st.text_input("1個(g)", value=get_default("1個(g)", ""))
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("保存", use_container_width=True):
+            if not food_name.strip():
+                st.error("メニュー名は必須です")
+                return
+
+            if str(kcal).strip() == "":
+                st.error("100gあたりカロリーは必須です")
+                return
+
+            item_data = {
+                "食材": food_name.strip(),
+                "エネルギー": empty_to_zero(kcal),
+                "たんぱく質": empty_to_zero(protein),
+                "脂質": empty_to_zero(fat),
+                "炭水化物": empty_to_zero(carb),
+                "カルシウム": empty_to_zero(calcium),
+                "鉄": empty_to_zero(iron),
+                "ビタミンA": empty_to_zero(vitA),
+                "ビタミンE": empty_to_zero(vitE),
+                "ビタミンB1": empty_to_zero(vitB1),
+                "ビタミンB2": empty_to_zero(vitB2),
+                "ビタミンC": empty_to_zero(vitC),
+                "食物繊維": empty_to_zero(fiber),
+                "食塩相当量": empty_to_zero(salt),
+                "1個(g)": empty_to_zero(unit_g),
+                "source": "my_item"
+            }
+
+            if edit_name:
+                ok = update_my_item(edit_name, item_data)
+                if ok:
+                    st.success("更新しました")
+                else:
+                    st.error("更新対象が見つかりません")
+                    return
+            else:
+                existing = nutrition_df[nutrition_df["食材"] == food_name.strip()]
+                if not existing.empty:
+                    st.error("同じ名前の食材がすでにあります")
+                    return
+
+                save_my_item(item_data)
+                st.success("登録しました")
+
+            st.session_state.my_item_edit_name = None
+            st.session_state.page = "my_items"
+            st.rerun()
+
+    with col2:
+        if st.button("キャンセル", use_container_width=True):
+            st.session_state.my_item_edit_name = None
+            st.session_state.page = "my_items"
+            st.rerun()
 
 if st.session_state.page == "dashboard":
     show_dashboard()
@@ -2215,6 +2428,12 @@ elif st.session_state.page == "recipe_search":
 
 elif st.session_state.page == "nutrition_graph":
     show_nutrition_graph()
+
+elif st.session_state.page == "my_items":
+    show_my_items()
+
+elif st.session_state.page == "my_item_form":
+    show_my_item_form()
 
 
 
