@@ -2274,6 +2274,44 @@ def get_my_items():
     df = df[df["source"] == "my_item"].copy()
     return df
 
+#＋ボタンで食事登録する関数
+def add_my_item_to_meal(item_row, target_date, target_meal_type):
+    nutrition_dict = load_nutrition()
+
+    food_name = item_row["食材"]
+    gram = safe_float(item_row.get("1個(g)", 0))
+
+    if gram <= 0:
+        return False, "1個(g) が未登録のため追加できません"
+
+    ingredients = [{
+        "food": food_name,
+        "gram": gram
+    }]
+
+    meal_id = save_meal_log_base(
+        target_date,
+        target_meal_type,
+        food_name,
+        servings=1
+    )
+
+    save_ingredients(meal_id, ingredients)
+
+    nut = calc_nutrition(ingredients, nutrition_dict)
+
+    update_meal_log(
+        meal_id,
+        nut
+    )
+
+    load_meal_log.clear()
+    load_meal_ingredients.clear()
+    load_nutrition.clear()
+    load_nutrition_df.clear()
+
+    return True, f"{gram:.0f}g で登録しました"
+
 
 #マイアイテム一覧画面
 def show_my_items():
@@ -2304,15 +2342,34 @@ def show_my_items():
         return
 
     for _, r in df.iterrows():
-        col1, col2, col3 = st.columns([5, 2, 1])
+        col1, col2, col3, col4 = st.columns([4, 2, 1, 1])
 
         with col1:
             st.write(f"**{r['食材']}**")
+            gram_1 = safe_float(r.get("1個(g)", 0))
+            if gram_1 > 0:
+                st.caption(f"1個: {gram_1:.0f}g")
+            else:
+                st.caption("1個(g) 未登録")
 
         with col2:
-            st.write(f"{safe_float(r.get('エネルギー', 0)):.1f} kcal")
+            st.write(f"{safe_float(r.get('エネルギー', 0)):.1f} kcal/100g")
 
         with col3:
+            if st.button("＋", key=f"add_my_item_{r['食材']}"):
+                ok, msg = add_my_item_to_meal(
+                    item_row=r,
+                    target_date=st.session_state.selected_date,
+                    target_meal_type=st.session_state.meal_type
+                )
+
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        with col4:
             if st.button("編集", key=f"edit_my_item_{r['食材']}"):
                 st.session_state.my_item_edit_name = r["食材"]
                 st.session_state.page = "my_item_form"
