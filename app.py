@@ -399,79 +399,83 @@ def show_dashboard():
     
     st.session_state.selected_date = selected_date
 
-    st.subheader("朝食")
-
-    if st.button("✏ 朝食を編集"):
-        st.session_state.meal_type = "朝食"
-        st.session_state.page = "meal_add"
-        st.rerun()
-
-    st.subheader("昼食")
-
-    if st.button("✏ 昼食を編集"):
-        st.session_state.meal_type = "昼食"
-        st.session_state.page = "meal_add"
-        st.rerun()
-
-    st.subheader("夕食")
-
-    if st.button("✏ 夕食を編集"):
-        st.session_state.meal_type = "夕食"
-        st.session_state.page = "meal_add"
-        st.rerun()
-
     st.divider()
 
-    if st.button("栄養グラフ"):
+    if st.button("1日分の栄養グラフ"):
+        st.session_state.graph_target = "daily"
         st.session_state.page = "nutrition_graph"
         st.rerun()
 
+    logs = load_meal_log().copy()
 
-    
-    logs = load_meal_log()
+    if "kcal" in logs.columns:
+        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
+    else:
+        logs["kcal_num"] = 0
 
     today = logs[logs["date"] == str(st.session_state.selected_date)]
-    
-    for meal in ["朝食","昼食","夕食"]:
-    
-        st.subheader(meal)
-    
-        rows = today[today["meal_type"] == meal]
-    
-        for _, r in rows.iterrows():
-            st.write(f"{r['recipe']} {float(r['kcal']):.0f} kcal")
 
-    #for meal in ["朝食","昼食","夕食"]:
+    for meal in ["朝食", "昼食", "夕食"]:
+        rows = today[today["meal_type"] == meal].copy()
+        total_kcal = rows["kcal_num"].sum()
 
-        #st.subheader(meal)
-    
-        #if meal in st.session_state.get("meal_data",{}):
-            #for r in st.session_state.meal_data[meal]:
-                #st.write(f"{r['title']}  {r['kcal']:.0f} kcal")
+        col1, col2, col3 = st.columns([3, 2, 2])
+
+        with col1:
+            st.subheader(meal)
+
+        with col2:
+            st.write(f"**{total_kcal:.0f} kcal**")
+
+        with col3:
+            col3a, col3b = st.columns(2)
+
+            with col3a:
+                if st.button("編集", key=f"edit_{meal}"):
+                    st.session_state.meal_type = meal
+                    st.session_state.page = "meal_add"
+                    st.rerun()
+
+            with col3b:
+                if st.button("栄養", key=f"graph_{meal}"):
+                    st.session_state.meal_type = meal
+                    st.session_state.graph_target = "meal_type"
+                    st.session_state.page = "nutrition_graph"
+                    st.rerun()
+
+        if rows.empty:
+            st.caption("未登録")
+        else:
+            for _, r in rows.iterrows():
+                st.write(f"{r['recipe']} {safe_float(r['kcal_num']):.0f} kcal")
+
+        st.divider()
+
+
 
 # =========================
 # 栄養グラフ画面
 # =========================
 def show_nutrition_graph():
 
-    st.title("栄養グラフ")
-
-    logs = load_meal_log()
-    #st.write(logs.dtypes)
+    logs = load_meal_log().copy()
 
     numeric_cols = [
         "kcal","protein","fat","carb","calcium","iron",
         "vitA","vitE","vitB1","vitB2","vitC","fiber","salt"
     ]
-    
+
     for c in numeric_cols:
-        logs[c] = pd.to_numeric(logs[c], errors="coerce").fillna(0)
+        if c in logs.columns:
+            logs[c] = pd.to_numeric(logs[c], errors="coerce").fillna(0)
+        else:
+            logs[c] = 0
 
-    today = logs[logs["date"] == str(st.session_state.selected_date)]
+    today = logs[logs["date"] == str(st.session_state.selected_date)].copy()
 
-    totals = today[numeric_cols].sum()
+    graph_target = st.session_state.get("graph_target", "daily")
 
-    target = {
+    full_target = {
         "kcal":1600,
         "protein":60,
         "fat":44,
@@ -486,6 +490,30 @@ def show_nutrition_graph():
         "vitB2":1.2,
         "vitC":100
     }
+
+    if graph_target == "meal_type":
+        meal_type = st.session_state.get("meal_type", "朝食")
+        today = today[today["meal_type"] == meal_type].copy()
+
+        ratio_map = {
+            "朝食": 0.17,
+            "昼食": 0.35,
+            "夕食": 0.35
+        }
+        meal_ratio = ratio_map.get(meal_type, 0.35)
+
+        target = {
+            k: v * meal_ratio
+            for k, v in full_target.items()
+        }
+
+        st.title(f"{meal_type} の栄養グラフ")
+        st.caption(f"基準値は1日分の {meal_ratio*100:.0f}%")
+    else:
+        target = full_target
+        st.title("1日分の栄養グラフ")
+
+    totals = today[numeric_cols].sum()
 
     upper_limit = {
         "vitA":2700,
@@ -518,29 +546,24 @@ def show_nutrition_graph():
     texts = []
 
     for k in target:
-
-        intake = totals.get(k,0)
+        intake = totals.get(k, 0)
         base = target[k]
 
-        ratio = intake/base*100 if base > 0 else 0
+        ratio = intake / base * 100 if base > 0 else 0
 
-        if k in ["kcal","protein","fat","carb"]:
-        
+        if k in ["kcal", "protein", "fat", "carb"]:
             low = 90
             high = 120
-        
+
         elif k in upper_limit:
-        
             low = 100
             high = min(upper_limit[k] / base * 100, 200)
 
         elif k == "salt":
-        
             low = 0
             high = 100
-        
+
         else:
-        
             low = 100
             high = None
 
@@ -559,8 +582,7 @@ def show_nutrition_graph():
         colors.append(color)
 
         texts.append(
-            f"{status}<br>"
-            f"{intake:.1f} / {base}"
+            f"{status}<br>{intake:.1f} / {base:.1f}"
         )
 
         if high:
@@ -605,12 +627,9 @@ def show_nutrition_graph():
 
     st.plotly_chart(fig, use_container_width=True)
 
-    
-
     if st.button("←戻る"):
-        st.session_state.page="dashboard"
+        st.session_state.page = "dashboard"
         st.rerun()
-
 
 # =========================
 # 食事追加画面
