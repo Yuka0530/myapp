@@ -631,6 +631,168 @@ def show_nutrition_graph():
         st.session_state.page = "dashboard"
         st.rerun()
 
+#デリッシュキッチン検索
+@st.cache_data(show_spinner=False)
+def search_delish_recipes(query):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    q = requests.utils.quote(query)
+    url = f"https://delishkitchen.tv/search?q={q}"
+    st.write(query)
+    st.write(url)
+
+    res = requests.get(url, headers=headers, timeout=10)
+    res.raise_for_status()
+
+    soup = BeautifulSoup(res.text, "html.parser")
+
+    results = []
+    seen = set()
+
+    for a in soup.select("a[href*='/recipes/']"):
+        st.write(a)
+        href = a.get("href", "")
+        if not href or "/recipes/" not in href:
+            continue
+
+        full_url = href if href.startswith("http") else "https://delishkitchen.tv" + href
+        if full_url in seen:
+            continue
+        seen.add(full_url)
+
+        text = a.get_text(" ", strip=True)
+        if not text:
+            continue
+
+        results.append({
+            "type": "recipe",
+            "title": text,
+            "url": full_url
+        })
+
+    return results[:10]
+
+#レシピ詳細取得
+@st.cache_data(show_spinner=False)
+def get_delish_recipe_detail(url):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=10)
+    res.raise_for_status()
+
+    soup = BeautifulSoup(res.text, "html.parser")
+
+    # タイトル
+    title = ""
+    title_el = soup.select_one("span.title") or soup.select_one("h1")
+    if title_el:
+        title = title_el.get_text(strip=True)
+
+    # 栄養
+    nutrients = {
+        "kcal": 0,
+        "protein": 0,
+        "fat": 0,
+        "carb": 0,
+        "salt": 0
+    }
+
+    for li in soup.select("ul.recipe-nutrients li.recipe-nutrient"):
+        name_el = li.select_one(".nutrient-name p")
+        amount_el = li.select_one(".nutrient-amount p")
+        if not name_el or not amount_el:
+            continue
+
+        name = name_el.get_text(strip=True)
+        amount_text = amount_el.get_text(strip=True)
+
+        num_match = re.search(r"(\d+(?:\.\d+)?)", amount_text)
+        value = float(num_match.group(1)) if num_match else 0
+
+        if name == "カロリー":
+            nutrients["kcal"] = value
+        elif name == "たんぱく質":
+            nutrients["protein"] = value
+        elif name == "脂質":
+            nutrients["fat"] = value
+        elif name == "炭水化物":
+            nutrients["carb"] = value
+        elif name == "塩分":
+            nutrients["salt"] = value
+
+    # 人数
+    servings = 1
+    ingredients_block = soup.select_one(".delish-recipe-ingredients")
+    if ingredients_block:
+        h2 = ingredients_block.select_one("h2")
+        if h2:
+            text = h2.get_text(strip=True)
+            m = re.search(r"(\d+)", text)
+            if m:
+                servings = int(m.group(1))
+
+    # 材料
+    ingredients = []
+    for item in soup.select(".ingredient"):
+        name_el = item.select_one(".ingredient-name")
+        amt_el = item.select_one(".ingredient-serving")
+        if not name_el or not amt_el:
+            continue
+
+        ingredients.append({
+            "name": name_el.get_text(strip=True),
+            "amount": amt_el.get_text(strip=True)
+        })
+
+    return {
+        "title": title,
+        "url": url,
+        "servings": servings,
+        "ingredients": ingredients,
+        "nutrients": nutrients
+    }
+
+#nutrition候補 + デリッシュ候補をまとめて返す
+def search_foods_and_recipes(words):
+    food_df = load_nutrition_df()
+
+    results = {}
+
+    for w in words:
+        if not w.strip():
+            continue
+
+        food_rows = food_df[food_df["食材"].str.contains(w, na=False)].copy()
+
+        food_items = []
+        for _, row in food_rows.iterrows():
+            food_items.append({
+                "type": "food",
+                "title": row["食材"],
+                "kcal": safe_float(row.get("エネルギー", 0)),
+                "row": row.to_dict()
+            })
+
+        recipe_items = []
+        try:
+            delish_hits = search_delish_recipes(w)
+            for r in delish_hits:
+                try:
+                    detail = get_delish_recipe_detail(r["url"])
+                    recipe_items.append({
+                        "type": "recipe",
+                        "title": detail["title"],
+                        "kcal": detail["nutrients"]["kcal"],
+                        "url": detail["url"],
+                        "detail": detail
+                    })
+                except:
+                    continue
+        except:
+            pass
+
+        results[w] = food_items + recipe_items
+
+    return results
+
 # =========================
 # 食事追加画面
 # =========================
@@ -648,25 +810,6 @@ def show_meal_add():
     
         return df
     
-    
-    def search_foods(words):
-    
-        df = load_food_master()
-    
-        results = {}
-    
-        for w in words:
-    
-            if w.strip() == "":
-                continue
-    
-            r = df[df["食材"].str.contains(w, na=False)]
-    
-            results[w] = r
-    
-        return results    
-    
-
 
 
     st.title(f"{st.session_state.meal_type} を追加")
@@ -692,6 +835,9 @@ def show_meal_add():
 
     if "history_filter_mode" not in st.session_state:
         st.session_state.history_filter_mode = "meal_type"
+
+    if "meal_add_recipe_selected_foods" not in st.session_state:
+        st.session_state.meal_add_recipe_selected_foods = {}
     
     # =========================
     # 1検索バー
@@ -719,7 +865,7 @@ def show_meal_add():
             words = [w for w in words if w]
             
     #nutritionからワードを含む言葉を探しデータで返す（辞書、keyは検索したワード）
-            results = search_foods(words)
+            results = search_foods_and_recipes(words)
     
             st.session_state.search_results = results
             st.session_state.remaining_words = list(results.keys())
@@ -734,11 +880,9 @@ def show_meal_add():
         st.subheader("検索結果")
     
         for word in st.session_state.remaining_words:
-    
-            df = st.session_state.search_results[word]
-    
-            if st.button(f"{word} ({len(df)}件)", key=f"btn_{word}"):
-    
+            items = st.session_state.search_results[word]
+
+            if st.button(f"{word} ({len(items)}件)", key=f"btn_{word}"):
                 st.session_state.current_word = word
                 st.session_state.search_step = 3
                 st.rerun()
@@ -747,98 +891,195 @@ def show_meal_add():
     elif st.session_state.search_step == 3:
     
         word = st.session_state.current_word
-        df = st.session_state.search_results[word]
-    
+        items = st.session_state.search_results[word]
+
         st.subheader(word)
-    
-        for i,row in df.iterrows():
-    
-            food = row["食材"]
-            kcal = row["エネルギー"]
-    
-            if st.button(f"{food} {kcal} kcal", key=f"food_{i}"):
-    
-                st.session_state.selected_foods_temp.append(row)
-    
-                st.session_state.remaining_words.remove(word)
-    
-                if len(st.session_state.remaining_words) == 0:
-                    st.session_state.search_step = 4
-                else:
-                    st.session_state.search_step = 2
-    
-                st.rerun()
-                
+
+        for i, item in enumerate(items):
+            if item["type"] == "food":
+                label = f"【食材】{item['title']} {safe_float(item['kcal']):.0f} kcal/100g"
+                if st.button(label, key=f"food_{word}_{i}"):
+                    st.session_state.selected_foods_temp.append(item)
+                    st.session_state.remaining_words.remove(word)
+
+                    if len(st.session_state.remaining_words) == 0:
+                        st.session_state.search_step = 4
+                    else:
+                        st.session_state.search_step = 2
+
+                    st.rerun()
+
+            elif item["type"] == "recipe":
+                label = f"【レシピ】{item['title']} {safe_float(item['kcal']):.0f} kcal/1人分"
+                if st.button(label, key=f"recipe_{word}_{i}"):
+                    st.session_state.selected_foods_temp.append(item)
+                    st.session_state.remaining_words.remove(word)
+
+                    if len(st.session_state.remaining_words) == 0:
+                        st.session_state.search_step = 4
+                    else:
+                        st.session_state.search_step = 2
+
+                    st.rerun()
+
+                st.markdown(f"[レシピを開く]({item['url']})")
 
     #⑤最終登録確認
     elif st.session_state.search_step == 4:
-    
         st.subheader("登録確認")
-    
-        foods = st.session_state.selected_foods_temp
-    
-        results = []
-    
-        for i,food in enumerate(foods):
-    
-            st.write(food["食材"])
-    
-            amount = st.number_input(
-                f"分量(g) {i}",
-                value=100,
-                step=10,
-                key=f"amt_{i}"
-            )
-    
-            ratio = amount / 100
-    
 
-    
-            kcal = safe_float(food["エネルギー"]) * ratio
-    
-            st.write(f"{kcal:.1f} kcal")
-    
-            results.append((food,amount))
+        items = st.session_state.selected_foods_temp
+        nutrition_dict = load_nutrition()
+        food_master = list(nutrition_dict.keys())
+
+        save_queue = []
+
+        for i, item in enumerate(items):
+            st.divider()
+
+            # -------------------------
+            # 通常の食材候補
+            # -------------------------
+            if item["type"] == "food":
+                st.write(f"**{item['title']}**")
+
+                amount = st.number_input(
+                    f"分量(g) {i}",
+                    value=100.0,
+                    step=10.0,
+                    key=f"amt_food_{i}"
+                )
+
+                ratio = amount / 100
+                kcal = safe_float(item["row"]["エネルギー"]) * ratio
+                st.write(f"{kcal:.1f} kcal")
+
+                save_queue.append({
+                    "type": "food",
+                    "title": item["title"],
+                    "ingredients": [{
+                        "food": item["title"],
+                        "gram": amount
+                    }],
+                    "servings": 1
+                })
+
+            # -------------------------
+            # デリッシュ候補
+            # -------------------------
+            elif item["type"] == "recipe":
+                detail = item["detail"]
+                title = detail["title"]
+                url = detail["url"]
+                servings = detail["servings"]
+                raw_ingredients = detail["ingredients"]
+
+                st.write(f"**{title}**")
+                st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal")
+                st.markdown(f"[レシピを開く]({url})")
+
+                recipe_key = f"meal_add_recipe_{i}"
+
+                with st.expander("材料と分量を確認・編集", expanded=True):
+                    selected_ingredients = []
+
+                    for j, ing in enumerate(raw_ingredients):
+                        ing_name = ing["name"]
+                        ing_amount = ing["amount"]
+
+                        # 候補検索
+                        candidates = [
+                            food for food in food_master
+                            if normalize(ing_name) in normalize(food)
+                        ][:30]
+
+                        if not candidates:
+                            candidates = food_master[:30]
+
+                        selected_food = st.selectbox(
+                            f"{title} / 材料{j+1}",
+                            candidates,
+                            key=f"{recipe_key}_food_{j}"
+                        )
+
+                        manual_search = st.text_input(
+                            f"手動検索 {title} / 材料{j+1}",
+                            key=f"{recipe_key}_search_{j}"
+                        )
+
+                        if manual_search.strip():
+                            manual_candidates = [
+                                food for food in food_master
+                                if normalize(manual_search) in normalize(food)
+                            ][:30]
+
+                            if manual_candidates:
+                                selected_food = st.selectbox(
+                                    f"手動候補 {title} / 材料{j+1}",
+                                    manual_candidates,
+                                    key=f"{recipe_key}_manual_food_{j}"
+                                )
+
+                        default_g = parse_amount(
+                            ing_amount,
+                            food_name=selected_food,
+                            nutrition_dict=nutrition_dict
+                        )
+
+                        gram = st.number_input(
+                            f"分量(g) {title} / 材料{j+1}",
+                            value=float(default_g),
+                            step=1.0,
+                            key=f"{recipe_key}_gram_{j}"
+                        )
+
+                        st.caption(f"元の表記: {ing_name} / {ing_amount}")
+
+                        selected_ingredients.append({
+                            "food": selected_food,
+                            "gram": gram
+                        })
+
+                    preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
+                    per_person_preview = divide_nutrition(preview_nut, servings)
+
+                    st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
+
+                    save_queue.append({
+                        "type": "recipe",
+                        "title": title,
+                        "ingredients": selected_ingredients,
+                        "servings": servings
+                    })
     
         if st.button("完了"):
-        
-            for food,amount in results:
-        
-                ingredients = [{
-                    "food": food["食材"],
-                    "gram": amount
-                }]
-        
+            for item in save_queue:
                 meal_id = save_meal_log_base(
                     st.session_state.selected_date,
                     st.session_state.meal_type,
-                    food["食材"],
-                    servings=1
+                    item["title"],
+                    servings=item["servings"]
                 )
-        
-                save_ingredients(
-                    meal_id,
-                    ingredients
-                )
-        
-                nut = calc_nutrition(
-                    ingredients,
-                    load_food_master().set_index("食材").to_dict("index")
-                )
-        
+
+                save_ingredients(meal_id, item["ingredients"])
+
+                total_nut = calc_nutrition(item["ingredients"], nutrition_dict)
+                per_person_nut = divide_nutrition(total_nut, item["servings"])
+
                 update_meal_log(
                     meal_id,
-                    nut
+                    per_person_nut
                 )
-        
+
             st.success("登録しました")
-        
+
             st.session_state.search_step = 0
             st.session_state.selected_foods_temp = []
             st.session_state.search_results = {}
-        
+
             load_meal_log.clear()
-        
+            load_meal_ingredients.clear()
+
             st.rerun()
 
     col_a, col_b = st.columns(2)
