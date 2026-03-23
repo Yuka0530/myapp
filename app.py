@@ -40,6 +40,173 @@ def safe_float(x):
         return float(x)
     except:
         return 0
+    
+# =========================
+# 文字正規化
+# =========================
+def normalize(text):
+    return str(text).replace("\u3000","").replace(" ","").strip()
+
+
+def parse_amount(text, food_name=None, nutrition_dict=None):
+
+    if text is None:
+        return 0
+
+    text = str(text)
+
+    # ① g表記
+    g_match = re.search(r'(\d+(?:\.\d+)?)\s*g', text)
+    if g_match:
+        return float(g_match.group(1))
+
+    # ② 大さじ
+    if "大さじ" in text:
+    
+        # ⭐ 分数チェック
+        frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
+        if frac_match:
+            count = float(frac_match.group(1)) / float(frac_match.group(2))
+        else:
+            num = re.findall(r'\d+(?:\.\d+)?', text)
+            count = float(num[0]) if num else 1
+    
+        gram = get_spoon_weight(food_name, "tbsp")
+    
+        if gram is None:
+            gram = 15
+    
+        return count * gram
+
+    # ③ 小さじ
+    if "小さじ" in text:
+    
+        frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
+        if frac_match:
+            count = float(frac_match.group(1)) / float(frac_match.group(2))
+        else:
+            num = re.findall(r'\d+(?:\.\d+)?', text)
+            count = float(num[0]) if num else 1
+    
+        gram = get_spoon_weight(food_name, "tsp")
+    
+        if gram is None:
+            gram = 5
+    
+        return count * gram
+
+    # ④ 個数変換
+    # 分数チェック 例: 1/2個
+    frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
+    
+    if frac_match and food_name and nutrition_dict:
+    
+        count = float(frac_match.group(1)) / float(frac_match.group(2))
+    
+        if food_name in nutrition_dict:
+    
+            gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
+    
+            if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
+                return 0.0
+    
+            return count * float(gram_per_unit)
+    
+    unit_match = re.search(r'(\d+(?:\.\d+)?)', text)
+    #st.write(unit_match)
+
+    if unit_match and food_name and nutrition_dict:
+
+        count = float(unit_match.group(1))
+    
+        if food_name in nutrition_dict:
+
+            gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
+            
+            if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
+                return 0.0
+    
+            return count * float(gram_per_unit)
+
+    return 0.0
+
+def get_spoon_weight(food_name, spoon_type):
+
+    if food_name is None:
+        return None
+
+    for key in SPOON_WEIGHT:
+        if key in food_name:
+            return SPOON_WEIGHT[key][spoon_type]
+
+    return None
+
+# =========================
+# 調味料 大さじ・小さじ 重量
+# =========================
+
+SPOON_WEIGHT = {
+    "しょうゆ": {"tbsp": 18, "tsp": 6},
+    "醤油": {"tbsp": 18, "tsp": 6},
+    "砂糖": {"tbsp": 9, "tsp": 3},
+    "みりん": {"tbsp": 18, "tsp": 6},
+    "酒": {"tbsp": 15, "tsp": 5},
+    "酢": {"tbsp": 15, "tsp": 5},
+    "マヨネーズ": {"tbsp": 14, "tsp": 5},
+    "ケチャップ": {"tbsp": 18, "tsp": 6},
+    "油": {"tbsp": 12, "tsp": 4},
+    "オリーブオイル": {"tbsp": 12, "tsp": 4},
+    "でん粉": {"tbsp": 9, "tsp": 3},
+    "コチュジャン": {"tbsp": 18, "tsp": 7},
+    "味噌": {"tbsp": 18, "tsp": 6},
+    "みそ": {"tbsp": 18, "tsp": 6},
+}
+
+
+# =========================
+# 候補を「選択回数順」にする関数
+# =========================    
+
+
+def get_sorted_candidates(original_name, candidates, mapping):
+    if original_name not in mapping:
+        return candidates
+
+    history = mapping.get(original_name, {})
+
+    if not isinstance(history, dict):
+        return candidates
+
+    return sorted(
+        candidates,
+        key=lambda x: history.get(x, 0),
+        reverse=True
+    )
+
+def format_food_label(food):
+    kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
+    if kcal:
+        return f"{food}   ({kcal} kcal/100g)"
+    return food
+
+@st.cache_data
+def load_mapping():
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").sheet1
+
+    data = sheet.get_all_values()[1:]
+
+    mapping = {}
+
+    for original, selected, count in data:
+        count = int(count) if count else 0
+
+        if original not in mapping:
+            mapping[original] = {}
+
+        mapping[original][selected] = count
+
+    return mapping
 
 # =========================
 # 食事記録読み込み
@@ -798,6 +965,9 @@ def search_foods_and_recipes(words):
 # =========================
 
 def show_meal_add():
+
+    mapping = load_mapping()
+
     @st.cache_data
     def load_food_master():
     
@@ -813,6 +983,37 @@ def show_meal_add():
 
 
     st.title(f"{st.session_state.meal_type} を追加")
+
+    def save_multiple_to_mapping(items_to_save):
+        """
+        items_to_save: [(original, selected), ...]
+        """
+        if not items_to_save:
+            return
+
+        client = connect_gsheet()
+        sheet = client.open("food_mapping").sheet1
+
+        all_data = sheet.get_all_values()
+        rows_to_append = []
+
+        for original, selected in items_to_save:
+            found = False
+
+            for i, row in enumerate(all_data[1:], start=2):
+                if len(row) >= 2 and row[0] == original and row[1] == selected:
+                    count = int(row[2]) if len(row) > 2 and row[2] else 0
+                    sheet.update_cell(i, 3, count + 1)
+                    found = True
+                    break
+
+            if not found:
+                rows_to_append.append([original, selected, 1])
+
+        if rows_to_append:
+            sheet.append_rows(rows_to_append)
+
+        load_mapping.clear()
 
     # =========================
     # 検索ステップ管理
@@ -839,6 +1040,9 @@ def show_meal_add():
     if "meal_add_recipe_selected_foods" not in st.session_state:
         st.session_state.meal_add_recipe_selected_foods = {}
     
+
+
+
     # =========================
     # 1検索バー
     # =========================
@@ -982,28 +1186,52 @@ def show_meal_add():
 
                 with st.expander("材料と分量を確認・編集", expanded=True):
                     selected_ingredients = []
+                    mapping_items_to_save = []
 
                     for j, ing in enumerate(raw_ingredients):
                         ing_name = ing["name"]
                         ing_amount = ing["amount"]
 
-                        # 候補検索
+                        st.markdown(f"### {ing_name}")
+                        st.caption(f"元の表記: {ing_amount}")
+
+                        # =========================
+                        # 自動検索候補
+                        # =========================
                         candidates = [
                             food for food in food_master
                             if normalize(ing_name) in normalize(food)
-                        ][:30]
+                        ]
+
+                        # mapping履歴があるなら必ず追加
+                        if ing_name in mapping:
+                            for saved_food in mapping[ing_name].keys():
+                                if saved_food not in candidates:
+                                    candidates.append(saved_food)
+
+                        candidates = get_sorted_candidates(
+                            ing_name,
+                            candidates,
+                            mapping
+                        )
 
                         if not candidates:
                             candidates = food_master[:30]
+                        else:
+                            candidates = candidates[:50]
 
                         selected_food = st.selectbox(
-                            f"{title} / 材料{j+1}",
+                            "自動検索",
                             candidates,
+                            format_func=format_food_label,
                             key=f"{recipe_key}_food_{j}"
                         )
 
+                        # =========================
+                        # 手動検索
+                        # =========================
                         manual_search = st.text_input(
-                            f"手動検索 {title} / 材料{j+1}",
+                            "手動検索",
                             key=f"{recipe_key}_search_{j}"
                         )
 
@@ -1011,14 +1239,23 @@ def show_meal_add():
                             manual_candidates = [
                                 food for food in food_master
                                 if normalize(manual_search) in normalize(food)
-                            ][:30]
+                            ]
+
+                            # 手動検索候補にも現在選択中のものを残す
+                            if selected_food not in manual_candidates and selected_food in food_master:
+                                manual_candidates = [selected_food] + manual_candidates
+
+                            manual_candidates = manual_candidates[:50]
 
                             if manual_candidates:
                                 selected_food = st.selectbox(
-                                    f"手動候補 {title} / 材料{j+1}",
+                                    "手動検索候補",
                                     manual_candidates,
+                                    format_func=format_food_label,
                                     key=f"{recipe_key}_manual_food_{j}"
                                 )
+                            else:
+                                st.warning("手動検索候補が見つかりません")
 
                         default_g = parse_amount(
                             ing_amount,
@@ -1027,18 +1264,21 @@ def show_meal_add():
                         )
 
                         gram = st.number_input(
-                            f"分量(g) {title} / 材料{j+1}",
+                            "分量（g）",
                             value=float(default_g),
                             step=1.0,
                             key=f"{recipe_key}_gram_{j}"
                         )
 
-                        st.caption(f"元の表記: {ing_name} / {ing_amount}")
-
                         selected_ingredients.append({
                             "food": selected_food,
                             "gram": gram
                         })
+
+                        mapping_items_to_save.append((
+                            ing_name,
+                            selected_food
+                        ))
 
                     preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
                     per_person_preview = divide_nutrition(preview_nut, servings)
@@ -1049,7 +1289,8 @@ def show_meal_add():
                         "type": "recipe",
                         "title": title,
                         "ingredients": selected_ingredients,
-                        "servings": servings
+                        "servings": servings,
+                        "mapping_items": mapping_items_to_save
                     })
     
         if st.button("完了"):
@@ -1289,34 +1530,13 @@ def show_recipe_search():
         st.write("append:", original, selected)
         sheet.append_row([original, selected, 1])
     
-    @st.cache_data
-    def load_mapping():
-        client = connect_gsheet()
-        sheet = client.open("food_mapping").sheet1
-    
-        data = sheet.get_all_values()[1:]
-    
-        mapping = {}
-    
-        for original, selected, count in data:
-            count = int(count) if count else 0
-    
-            if original not in mapping:
-                mapping[original] = {}
-    
-            mapping[original][selected] = count
-    
-        return mapping
+
     
 
         
     nutrition_dict = load_nutrition()
     
-    # =========================
-    # 文字正規化
-    # =========================
-    def normalize(text):
-        return str(text).replace("\u3000","").replace(" ","").strip()
+
     
     # =========================
     # 候補検索
@@ -1434,37 +1654,9 @@ def show_recipe_search():
     
         return title, ingredients, servings
     
-    # =========================
-    # 調味料 大さじ・小さじ 重量
-    # =========================
+
     
-    SPOON_WEIGHT = {
-        "しょうゆ": {"tbsp": 18, "tsp": 6},
-        "醤油": {"tbsp": 18, "tsp": 6},
-        "砂糖": {"tbsp": 9, "tsp": 3},
-        "みりん": {"tbsp": 18, "tsp": 6},
-        "酒": {"tbsp": 15, "tsp": 5},
-        "酢": {"tbsp": 15, "tsp": 5},
-        "マヨネーズ": {"tbsp": 14, "tsp": 5},
-        "ケチャップ": {"tbsp": 18, "tsp": 6},
-        "油": {"tbsp": 12, "tsp": 4},
-        "オリーブオイル": {"tbsp": 12, "tsp": 4},
-        "でん粉": {"tbsp": 9, "tsp": 3},
-        "コチュジャン": {"tbsp": 18, "tsp": 7},
-        "味噌": {"tbsp": 18, "tsp": 6},
-        "みそ": {"tbsp": 18, "tsp": 6},
-    }
-    
-    def get_spoon_weight(food_name, spoon_type):
-    
-        if food_name is None:
-            return None
-    
-        for key in SPOON_WEIGHT:
-            if key in food_name:
-                return SPOON_WEIGHT[key][spoon_type]
-    
-        return None
+
     
     
     # =========================
@@ -1472,87 +1664,7 @@ def show_recipe_search():
     # =========================
     import re
     
-    def parse_amount(text, food_name=None, nutrition_dict=None):
-    
-        if text is None:
-            return 0
-    
-        text = str(text)
-    
-        # ① g表記
-        g_match = re.search(r'(\d+(?:\.\d+)?)\s*g', text)
-        if g_match:
-            return float(g_match.group(1))
-    
-        # ② 大さじ
-        if "大さじ" in text:
-        
-            # ⭐ 分数チェック
-            frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
-            if frac_match:
-                count = float(frac_match.group(1)) / float(frac_match.group(2))
-            else:
-                num = re.findall(r'\d+(?:\.\d+)?', text)
-                count = float(num[0]) if num else 1
-        
-            gram = get_spoon_weight(food_name, "tbsp")
-        
-            if gram is None:
-                gram = 15
-        
-            return count * gram
-    
-        # ③ 小さじ
-        if "小さじ" in text:
-        
-            frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
-            if frac_match:
-                count = float(frac_match.group(1)) / float(frac_match.group(2))
-            else:
-                num = re.findall(r'\d+(?:\.\d+)?', text)
-                count = float(num[0]) if num else 1
-        
-            gram = get_spoon_weight(food_name, "tsp")
-        
-            if gram is None:
-                gram = 5
-        
-            return count * gram
-    
-        # ④ 個数変換
-        # 分数チェック 例: 1/2個
-        frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
-        
-        if frac_match and food_name and nutrition_dict:
-        
-            count = float(frac_match.group(1)) / float(frac_match.group(2))
-        
-            if food_name in nutrition_dict:
-        
-                gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
-        
-                if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
-                    return 0.0
-        
-                return count * float(gram_per_unit)
-        
-        unit_match = re.search(r'(\d+(?:\.\d+)?)', text)
-        #st.write(unit_match)
-    
-        if unit_match and food_name and nutrition_dict:
-    
-            count = float(unit_match.group(1))
-        
-            if food_name in nutrition_dict:
-    
-                gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
-                
-                if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
-                    return 0.0
-        
-                return count * float(gram_per_unit)
-    
-        return 0.0
+
 
     
 
@@ -1590,31 +1702,7 @@ def show_recipe_search():
         return any(word in amount for word in IGNORE_WORDS)
     
     
-    # =========================
-    # 候補を「選択回数順」にする関数
-    # =========================    
     mapping = load_mapping()
-    
-    def get_sorted_candidates(original_name, candidates, mapping):
-        if original_name not in mapping:
-            return candidates
-    
-        history = mapping.get(original_name, {})
-        #st.write("original_name:", original_name)
-        #st.write("mapping:", mapping)
-        #st.write("history:", mapping.get(original_name))
-    
-    
-        if not isinstance(history, dict):
-            return candidates
-    
-        return sorted(
-            candidates,
-            key=lambda x: history.get(x, 0),
-            reverse=True
-        )
-    
-    
     ############################
     # アプリ
     ############################
@@ -1829,11 +1917,7 @@ def show_recipe_search():
 
                 selected = None
 
-                def format_food_label(food):
-                    kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
-                    if kcal:
-                        return f"{food}   ({kcal} kcal/100g)"
-                    return food
+
                 # =========================
                 # 既存の取得材料
                 # =========================
