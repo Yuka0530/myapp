@@ -1294,6 +1294,8 @@ def show_meal_add():
                     })
     
         if st.button("完了"):
+            all_mapping_items = []
+
             for item in save_queue:
                 meal_id = save_meal_log_base(
                     st.session_state.selected_date,
@@ -1311,6 +1313,12 @@ def show_meal_add():
                     meal_id,
                     per_person_nut
                 )
+
+                if item["type"] == "recipe":
+                    all_mapping_items.extend(item.get("mapping_items", []))
+
+            if all_mapping_items:
+                save_multiple_to_mapping(all_mapping_items)
 
             st.success("登録しました")
 
