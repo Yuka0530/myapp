@@ -183,7 +183,26 @@ def get_sorted_candidates(original_name, candidates, mapping):
         reverse=True
     )
 
+# =========================
+# 栄養データ読み込み、辞書化
+# =========================
+@st.cache_data
+def load_nutrition():
+
+    client = connect_gsheet()
+    sheet = client.open("nutrition").sheet1
+
+    data = sheet.get_all_values()
+
+    df = pd.DataFrame(data[1:], columns=data[0])
+
+    return df.set_index("食材").to_dict(orient="index")
+
+
+nutrition_dict = load_nutrition()
+food_master = list(nutrition_dict.keys())
 def format_food_label(food):
+
     kcal = nutrition_dict.get(food, {}).get("エネルギー", "")
     if kcal:
         return f"{food}   ({kcal} kcal/100g)"
@@ -373,20 +392,7 @@ def load_meal_ingredients():
     df = pd.DataFrame(data[1:], columns=data[0])
     return df
 
-# =========================
-# 栄養データ読み込み、辞書化
-# =========================
-@st.cache_data
-def load_nutrition():
 
-    client = connect_gsheet()
-    sheet = client.open("nutrition").sheet1
-
-    data = sheet.get_all_values()
-
-    df = pd.DataFrame(data[1:], columns=data[0])
-
-    return df.set_index("食材").to_dict(orient="index")
 
 # =========================
 # nutrition シートを DataFrame で読む関数
