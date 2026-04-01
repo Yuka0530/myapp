@@ -731,13 +731,20 @@ def show_dashboard():
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
 
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+
         col1, col2, col3 = st.columns([3, 2, 2])
 
         with col1:
-            st.subheader(meal)
+            st.markdown(f"### {meal}")
 
         with col2:
-            st.write(f"**{total_kcal:.0f} kcal**")
+            st.markdown(f"""
+            <div class="kpi-card">
+                <div class="soft-caption">合計カロリー</div>
+                <div style="font-size:1.6rem;font-weight:700;">{total_kcal:.0f} kcal</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col3:
             col3a, col3b = st.columns(2)
@@ -759,7 +766,20 @@ def show_dashboard():
             st.caption("未登録")
         else:
             for _, r in rows.iterrows():
-                st.write(f"{r['recipe']} {safe_float(r['kcal_num']):.0f} kcal")
+                st.markdown(f"""
+                <div style="
+                    background:#fffaf7;
+                    border:1px solid #f0e4db;
+                    border-radius:14px;
+                    padding:10px 14px;
+                    margin-bottom:8px;
+                ">
+                    <div style="font-weight:600;">{r['recipe']}</div>
+                    <div class="soft-caption">{safe_float(r['kcal_num']):.0f} kcal</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.divider()
 
