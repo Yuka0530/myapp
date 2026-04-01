@@ -133,27 +133,39 @@ hr {
     font-size: 0.9rem;
 }
 
-/* 下固定バー */
-.bottom-fixed-bar {
-    position: fixed;
-    bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(1000px, calc(100% - 24px));
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(8px);
-    padding: 14px 18px;
-    border: 1px solid #eadfd7;
-    border-radius: 18px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-    z-index: 9999;
+.bottom-spacer {
+    height: 120px;
 }
 
-.bottom-spacer {
-    height: 110px;
+.bottom-bar-inner {
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid #eadfd7;
+    border-radius: 18px;
+    padding: 12px 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.bottom-bar-kcal {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 60px;
+}
+
+/* bottom_bar 用の streamlit container を固定 */
+div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.bottom-bar-inner) {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 14px;
+    width: min(1000px, calc(100% - 24px));
+    z-index: 9999;
 }
 </style>
 """, unsafe_allow_html=True)
+
+
 
 # =========================
 # Google Sheets 接続
@@ -699,6 +711,7 @@ def show_dashboard():
 
 
     st.title("食事記録")
+    st.caption("日付ごとの食事を記録して、1日分・食事別の栄養バランスを確認できます")
 
     if "selected_date" not in st.session_state:
         st.session_state.selected_date = pd.Timestamp.today()
@@ -713,7 +726,7 @@ def show_dashboard():
 
     st.divider()
 
-    if st.button("1日分の栄養グラフ"):
+    if st.button("📊1日分の栄養グラフ"):
         st.session_state.graph_target = "daily"
         st.session_state.page = "nutrition_graph"
         st.rerun()
@@ -730,8 +743,7 @@ def show_dashboard():
     for meal in ["朝食", "昼食", "夕食"]:
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
-
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        
 
         col1, col2, col3 = st.columns([3, 2, 2])
 
@@ -779,7 +791,6 @@ def show_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True)
 
         st.divider()
 
@@ -951,10 +962,19 @@ def show_nutrition_graph():
     ))
 
     fig.update_layout(
-        height=600,
+        height=650,
         xaxis_title="基準値比 (%)",
         yaxis=dict(autorange="reversed"),
-        showlegend=False
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.8)",
+        margin=dict(l=20, r=20, t=20, b=20),
+        font=dict(size=14)
+    )
+
+    fig.update_traces(
+        textfont_size=12,
+        marker_line_width=0
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -1504,14 +1524,15 @@ def show_meal_add():
             st.rerun()
 
     with col_b:
-        if st.button("マイアイテム"):
+        if st.button("⭐マイアイテム"):
             st.session_state.page = "my_items"
             st.rerun()
 
 
     #履歴表示
     st.divider()
-    st.subheader("登録履歴から追加")
+
+    st.subheader("📚登録履歴から追加")
 
     col_hist1, col_hist2 = st.columns(2)
 
@@ -1577,6 +1598,7 @@ def show_meal_add():
                     else:
                         st.error("履歴の登録に失敗しました")
 
+
     if st.button("←戻る"):
     
         st.session_state.search_step = 0
@@ -1586,23 +1608,6 @@ def show_meal_add():
         st.session_state.page = "dashboard"
         st.rerun()
 
-    st.markdown("""
-    <style>
-    .bottom-fixed-bar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: white;
-        padding: 12px 16px;
-        border-top: 1px solid #ddd;
-        z-index: 9999;
-    }
-    .bottom-spacer {
-        height: 100px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
     logs = load_meal_log()
     target_rows = logs[
@@ -1613,18 +1618,32 @@ def show_meal_add():
     total_kcal = pd.to_numeric(target_rows["kcal"], errors="coerce").fillna(0).sum()
     total_count = len(target_rows)
 
+    bottom_bar = st.container()
+
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="bottom-fixed-bar">', unsafe_allow_html=True)
 
-    col1, col2 = st.columns([2, 5])
-    with col1:
-        st.markdown(f"### {total_kcal:.0f} kcal")
-    with col2:
-        if st.button(f"登録を確認 ({total_count})", use_container_width=True, key="go_saved_confirm"):
-            st.session_state.page = "saved_meal_confirm"
-            st.rerun()
+    with bottom_bar:
+        st.markdown('<div class="bottom-bar-inner">', unsafe_allow_html=True)
+        col1, col2 = st.columns([2, 5])
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        with col1:
+            st.markdown(f"""
+            <div class="bottom-bar-kcal">
+                <div class="soft-caption">現在の合計</div>
+                <div style="font-size:1.5rem;font-weight:700;">{total_kcal:.0f} kcal</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            if st.button(
+                f"登録を確認 ({total_count})",
+                use_container_width=True,
+                key="go_saved_confirm"
+            ):
+                st.session_state.page = "saved_meal_confirm"
+                st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================
 # レシピ検索画面
@@ -1652,6 +1671,7 @@ def show_recipe_search():
         st.session_state.recipe_delete_target = None
     
     st.title("デリッシュ献立スクショ → 栄養計算")
+    st.caption("スクリーンショットやURLからレシピを取り込み、材料を調整して栄養計算できます")
     
     if st.button("←戻る"):
         st.session_state.recipes_current_page = {}
@@ -2830,7 +2850,7 @@ def add_my_item_to_meal(item_row, target_date, target_meal_type):
 
 #マイアイテム一覧画面
 def show_my_items():
-    st.title("マイアイテム")
+    st.title("⭐マイアイテム")
 
     df = get_my_items()
 
