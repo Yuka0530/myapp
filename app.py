@@ -769,8 +769,7 @@ def show_dashboard():
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
 
-        # 1行目：食事名 / 空き / kcal / 編集
-        col1, col2, col3, col4 = st.columns([3.6, 0.4, 1.8, 1.0], vertical_alignment="center")
+        col1, col2 = st.columns([3.8, 2.2], vertical_alignment="center")
 
         with col1:
             st.markdown(
@@ -779,19 +778,19 @@ def show_dashboard():
             )
 
         with col2:
-            st.write("")
+            sub1, sub2 = st.columns([3, 1], vertical_alignment="center")
 
-        with col3:
-            st.markdown(
-                f'<div style="text-align:right; font-size:1.25rem; font-weight:700; white-space: nowrap;">{total_kcal:.0f} kcal</div>',
-                unsafe_allow_html=True
-            )
+            with sub1:
+                st.markdown(
+                    f'<div style="text-align:right; font-size:1.25rem; font-weight:700; white-space: nowrap;">{total_kcal:.0f} kcal</div>',
+                    unsafe_allow_html=True
+                )
 
-        with col4:
-            if st.button("✏編集", key=f"edit_{meal}", use_container_width=True):
-                st.session_state.meal_type = meal
-                st.session_state.page = "meal_add"
-                st.rerun()
+            with sub2:
+                if st.button("✏", key=f"edit_{meal}", use_container_width=True):
+                    st.session_state.meal_type = meal
+                    st.session_state.page = "meal_add"
+                    st.rerun()
 
         st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
