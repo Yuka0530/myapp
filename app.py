@@ -785,7 +785,7 @@ def show_dashboard():
             )
 
         with col3:
-            if st.button("✏", key=f"edit_{meal}", use_container_width=True):
+            if st.button("✏", key=f"edit_{meal}"):
                 st.session_state.meal_type = meal
                 st.session_state.page = "meal_add"
                 st.rerun()
