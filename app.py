@@ -16,6 +16,145 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
+st.set_page_config(
+    page_title="栄養計算アプリ",
+    page_icon="🍽️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+st.markdown("""
+<style>
+/* 全体背景 */
+.stApp {
+    background: linear-gradient(180deg, #fffaf7 0%, #fffdfb 100%);
+}
+
+/* メイン幅と余白 */
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 6rem;
+    max-width: 1100px;
+}
+
+/* タイトル */
+h1, h2, h3 {
+    color: #3a312b;
+    letter-spacing: 0.02em;
+}
+
+h1 {
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+}
+
+h2, h3 {
+    font-weight: 600;
+}
+
+/* 通常文字 */
+p, label, div, span {
+    color: #4b4038;
+}
+
+/* ボタン */
+.stButton > button {
+    border-radius: 14px;
+    border: 1px solid #eadfd7;
+    background: white;
+    color: #4b4038;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    border-color: #d8b9a3;
+    color: #8a5a44;
+    transform: translateY(-1px);
+}
+
+/* 入力欄 */
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+textarea {
+    border-radius: 12px !important;
+    border: 1px solid #eadfd7 !important;
+    background: #fffefe !important;
+}
+
+/* selectbox */
+div[data-baseweb="select"] > div {
+    border-radius: 12px !important;
+    border: 1px solid #eadfd7 !important;
+    min-height: 44px;
+}
+
+/* expander */
+.streamlit-expanderHeader {
+    font-weight: 600;
+    color: #5b4d43;
+    background: #fff7f2;
+    border-radius: 10px;
+}
+
+/* 区切り線 */
+hr {
+    border: none;
+    border-top: 1px solid #f0e4db;
+    margin: 1rem 0;
+}
+
+/* メトリクスっぽい表示 */
+.kpi-card {
+    background: white;
+    border: 1px solid #f0e4db;
+    border-radius: 18px;
+    padding: 16px 18px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    margin-bottom: 12px;
+}
+
+/* sectionカード */
+.section-card {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid #f2e7df;
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+    margin-bottom: 16px;
+}
+
+/* 小さめ補足 */
+.soft-caption {
+    color: #8a7b71;
+    font-size: 0.9rem;
+}
+
+/* 下固定バー */
+.bottom-fixed-bar {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1000px, calc(100% - 24px));
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
+    padding: 14px 18px;
+    border: 1px solid #eadfd7;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    z-index: 9999;
+}
+
+.bottom-spacer {
+    height: 110px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # =========================
 # Google Sheets 接続
 # =========================
@@ -1473,8 +1612,6 @@ def show_meal_add():
 
 def show_recipe_search():
 
-    
-    st.set_page_config(layout="wide")
 
     
     if st.session_state.get("recipe_page_init") != True:
