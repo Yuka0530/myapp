@@ -136,15 +136,12 @@ hr {
 .bottom-spacer {
     height: 120px;
 }
+            
 
-.bottom-bar-inner {
-    background: rgba(255,255,255,0.94);
-    backdrop-filter: blur(10px);
-    border: 1px solid #eadfd7;
-    border-radius: 18px;
-    padding: 12px 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+.bottom-bar-anchor {
+    height: 0;
 }
+
 
 .bottom-bar-kcal {
     display: flex;
@@ -153,14 +150,20 @@ hr {
     min-height: 60px;
 }
 
-/* bottom_bar 用の streamlit container を固定 */
-div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.bottom-bar-inner) {
+/* 親コンテナ全体を固定 */
+div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.bottom-bar-anchor) {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
     bottom: 14px;
     width: min(1000px, calc(100% - 24px));
     z-index: 9999;
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid #eadfd7;
+    border-radius: 18px;
+    padding: 12px 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1623,8 +1626,8 @@ def show_meal_add():
     st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
 
     with bottom_bar:
-        st.markdown('<div class="bottom-bar-inner">', unsafe_allow_html=True)
-        col1, col2 = st.columns([2, 5])
+        st.markdown('<div class="bottom-bar-anchor"></div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([2, 5], vertical_alignment="center")
 
         with col1:
             st.markdown(f"""
@@ -1643,7 +1646,7 @@ def show_meal_add():
                 st.session_state.page = "saved_meal_confirm"
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        
 
 # =========================
 # レシピ検索画面
