@@ -166,76 +166,6 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.botto
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
             
-.meal-card {
-    background: rgba(255,255,255,0.88);
-    border: 1px solid #f0e4db;
-    border-radius: 22px;
-    padding: 18px 16px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.04);
-    margin-bottom: 18px;
-}
-
-.meal-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 12px;
-}
-
-.meal-title {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #3a312b;
-    line-height: 1.2;
-}
-
-.meal-kcal-box {
-    background: #fffaf7;
-    border: 1px solid #f0e4db;
-    border-radius: 16px;
-    padding: 10px 14px;
-    min-width: 120px;
-    text-align: right;
-}
-
-.meal-kcal-label {
-    font-size: 0.8rem;
-    color: #8a7b71;
-    margin-bottom: 2px;
-}
-
-.meal-kcal-value {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #3a312b;
-}
-
-.meal-item-box {
-    background: #fffaf7;
-    border: 1px solid #f0e4db;
-    border-radius: 16px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
-}
-
-.meal-item-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #3a312b;
-    line-height: 1.5;
-    margin-bottom: 4px;
-}
-
-.meal-item-kcal {
-    font-size: 0.95rem;
-    color: #8a7b71;
-}
-
-.meal-empty {
-    color: #8a7b71;
-    padding: 6px 2px 12px 2px;
-}
 
 @media (max-width: 768px) {
     .meal-title {
@@ -829,58 +759,90 @@ def show_dashboard():
 
     today = logs[logs["date"] == str(st.session_state.selected_date)]
 
-    meal_meta = {
-        "朝食": {"label": "朝食", "icon": "🌅"},
-        "昼食": {"label": "昼食", "icon": "☀️"},
-        "夕食": {"label": "夕食", "icon": "🌙"},
+    meal_icons = {
+        "朝食": "🌅",
+        "昼食": "☀️",
+        "夕食": "🌙",
     }
 
     for meal in ["朝食", "昼食", "夕食"]:
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
 
-        st.markdown('<div class="meal-card">', unsafe_allow_html=True)
+        # 1行目：食事名 / kcal / 編集
+        col1, col2, col3 = st.columns([3.2, 2.2, 1.4], vertical_alignment="center")
 
-        # 上段：食事名 + カロリー
-        st.markdown(f"""
-        <div class="meal-header-row">
-            <div class="meal-title">{meal_meta[meal]["label"]}</div>
-            <div class="meal-kcal-box">
-                <div class="meal-kcal-label">合計カロリー</div>
-                <div class="meal-kcal-value">{total_kcal:.0f} kcal</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with col1:
+            st.markdown(
+                f'<div style="font-size: 2rem; font-weight: 700; line-height: 1.2;">{meal}</div>',
+                unsafe_allow_html=True
+            )
 
-        # 編集ボタン
-        col_edit_left, col_edit_btn = st.columns([5, 1.4])
-        with col_edit_btn:
-            if st.button("編集", key=f"edit_{meal}", use_container_width=True):
+        with col2:
+            st.markdown(
+                f'<div style="text-align:right; font-size:1.6rem; font-weight:700;">{total_kcal:.0f} kcal</div>',
+                unsafe_allow_html=True
+            )
+
+        with col3:
+            if st.button("✏", key=f"edit_{meal}", use_container_width=True):
                 st.session_state.meal_type = meal
                 st.session_state.page = "meal_add"
                 st.rerun()
 
-        # 登録内容
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
+        # 2行目：登録内容
         if rows.empty:
-            st.markdown('<div class="meal-empty">未登録</div>', unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div style="
+                    color:#8a7b71;
+                    padding:10px 2px 14px 2px;
+                    font-size:1rem;
+                ">
+                    未登録
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         else:
             for _, r in rows.iterrows():
-                st.markdown(f"""
-                <div class="meal-item-box">
-                    <div class="meal-item-title">{r['recipe']}</div>
-                    <div class="meal-item-kcal">{safe_float(r['kcal_num']):.0f} kcal</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:#fffaf7;
+                        border:1px solid #f0e4db;
+                        border-radius:16px;
+                        padding:12px 14px;
+                        margin-bottom:10px;
+                    ">
+                        <div style="
+                            font-size:1rem;
+                            font-weight:600;
+                            line-height:1.5;
+                            color:#3a312b;
+                            margin-bottom:4px;
+                        ">
+                            {r['recipe']}
+                        </div>
+                        <div style="
+                            font-size:0.95rem;
+                            color:#8a7b71;
+                        ">
+                            {safe_float(r['kcal_num']):.0f} kcal
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-        # 下段：栄養グラフボタン
+        # 3行目：栄養グラフ
         if st.button("栄養グラフ", key=f"graph_{meal}", use_container_width=True):
             st.session_state.meal_type = meal
             st.session_state.graph_target = "meal_type"
             st.session_state.page = "nutrition_graph"
             st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
 
         st.divider()
 
