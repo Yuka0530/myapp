@@ -16,6 +16,7 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
+
 st.set_page_config(
     page_title="栄養計算アプリ",
     page_icon="🍽️",
@@ -165,7 +166,73 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.botto
     padding: 12px 16px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
-            
+
+.meal-row-anchor {
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+
+/* anchor の直後に出る header 用 columns だけを狙う */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] > div[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+}
+
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"] {
+    min-width: 0 !important;
+}
+
+/* 1列目: 朝食 */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(1) {
+    flex: 4.6 1 0% !important;
+}
+
+/* 2列目: kcal */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(2) {
+    flex: 2.0 1 0% !important;
+}
+
+/* 3列目: 編集 */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(3) {
+    flex: 0.75 0 0% !important;
+}
+
+/* 編集ボタンを小さく */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] .stButton > button {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0.08rem 0.2rem !important;
+    font-size: 0.85rem !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+}
+
+/* ボタン内余白も少し詰める */
+.meal-row-anchor + div[data-testid="stLayoutWrapper"] .stButton button p {
+    margin: 0 !important;
+    line-height: 1 !important;
+}
+
+/* 見出し */
+.custom-meal-title {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* kcal */
+.custom-kcal {
+    text-align: right;
+    font-size: 0.98rem;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1.1;
+}
 
 @media (max-width: 768px) {
     .meal-title {
@@ -769,30 +836,32 @@ def show_dashboard():
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
 
-        col1, col2 = st.columns([3.8, 2.2], vertical_alignment="center")
+        header_box = st.container()
 
-        with col1:
-            st.markdown(
-                f'<div style="font-size: 1.9rem; font-weight: 700; line-height: 1.1; white-space: nowrap;">{meal}</div>',
-                unsafe_allow_html=True
-            )
+        with header_box:
+            st.markdown('<div class="meal-row-anchor"></div>', unsafe_allow_html=True)
 
-        with col2:
-            sub1, sub2 = st.columns([3, 1], vertical_alignment="center")
+            col1, col2, col3 = st.columns([6, 1, 1], vertical_alignment="center")
 
-            with sub1:
+            with col1:
                 st.markdown(
-                    f'<div style="text-align:right; font-size:1.25rem; font-weight:700; white-space: nowrap;">{total_kcal:.0f} kcal</div>',
+                    f'<div class="custom-meal-title">{meal}</div>',
                     unsafe_allow_html=True
                 )
 
-            with sub2:
-                if st.button("✏", key=f"edit_{meal}", use_container_width=True):
+            with col2:
+                st.markdown(
+                    f'<div class="custom-kcal">{total_kcal:.0f} kcal</div>',
+                    unsafe_allow_html=True
+                )
+
+            with col3:
+                if st.button("✏", key=f"edit_{meal}"):
                     st.session_state.meal_type = meal
                     st.session_state.page = "meal_add"
                     st.rerun()
 
-        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # 2行目：登録内容
         if rows.empty:
@@ -1222,6 +1291,18 @@ def show_meal_add():
 
 
     st.title(f"{st.session_state.meal_type} を追加")
+
+    with st.expander("この画面でできること"):
+        st.markdown("""
+    - **食材検索を開始**  
+    食材名や料理名で候補を探して、そのまま食事記録に追加できます。
+
+    - **レシピサイトを検索**  
+    レシピサイトやスクリーンショットからレシピを取り込み、材料を調整して栄養計算できます。
+
+    - **マイアイテム**  
+    よく使う食材や自作メニューをすばやく追加できます。
+    """)
 
     def save_multiple_to_mapping(items_to_save):
         """
