@@ -2093,8 +2093,28 @@ def show_recipe_search():
         key=url_input_key
     )
 
+    import re
+
+    def extract_delish_url(text):
+        if not text:
+            return None
+
+        text = str(text).strip()
+
+        # markdownリンク [タイトル](URL) からURL抽出
+        md_match = re.search(r'\((https?://[^)]+)\)', text)
+        if md_match:
+            return md_match.group(1).strip()
+
+        # 角括弧付きや文章内からURL抽出
+        url_match = re.search(r'https?://[^\s\]\)]+', text)
+        if url_match:
+            return url_match.group(0).strip()
+
+        return None
+
     if st.button("URL追加"):
-        url = manual_url.strip()
+        url = extract_delish_url(manual_url.strip())
         if url:
             if "delishkitchen.tv/recipes/" in url:
                 if url not in st.session_state.manual_recipe_urls:
