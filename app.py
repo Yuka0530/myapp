@@ -835,7 +835,7 @@ def show_dashboard():
         with header_box:
             st.markdown('<div class="meal-head-anchor"></div>', unsafe_allow_html=True)
 
-            col1, col2, col3 = st.columns([3, 1, 1], vertical_alignment="center", gap="small")
+            col1, col2, col3 = st.columns([6, 2.5, 0.8], vertical_alignment="center", gap="small")
 
             with col1:
                 st.markdown(
@@ -845,7 +845,7 @@ def show_dashboard():
 
             with col2:
                 st.markdown(
-                    f'<div class="custom-kcal">{total_kcal:.0f} kcal</div>',
+                    f'<div class="custom-kcal" style="text-align: right; width: 100%;">{total_kcal:.0f} kcal</div>',
                     unsafe_allow_html=True
                 )
 
@@ -3058,22 +3058,41 @@ def show_my_item_form():
         v = edit_row.get(col, default)
         return v if str(v).strip() != "" else default
 
-    food_name = st.text_input("メニュー名 *", value=get_default("食材", ""))
+    def get_default_per_piece(col, default=""):
+        """
+        nutritionシートには100gあたりで入っている前提なので、
+        編集画面では 1個(g) を使って 1個あたり に戻して表示する
+        """
+        if edit_row is None:
+            return default
 
-    kcal = st.text_input("100gあたりカロリー *", value=get_default("エネルギー", ""))
-    protein = st.text_input("たんぱく質", value=get_default("たんぱく質", ""))
-    fat = st.text_input("脂質", value=get_default("脂質", ""))
-    carb = st.text_input("炭水化物", value=get_default("炭水化物", ""))
-    calcium = st.text_input("カルシウム", value=get_default("カルシウム", ""))
-    iron = st.text_input("鉄", value=get_default("鉄", ""))
-    vitA = st.text_input("ビタミンA", value=get_default("ビタミンA", ""))
-    vitE = st.text_input("ビタミンE", value=get_default("ビタミンE", ""))
-    vitB1 = st.text_input("ビタミンB1", value=get_default("ビタミンB1", ""))
-    vitB2 = st.text_input("ビタミンB2", value=get_default("ビタミンB2", ""))
-    vitC = st.text_input("ビタミンC", value=get_default("ビタミンC", ""))
-    fiber = st.text_input("食物繊維", value=get_default("食物繊維", ""))
-    salt = st.text_input("食塩相当量", value=get_default("食塩相当量", ""))
-    unit_g = st.text_input("1個(g)", value=get_default("1個(g)", ""))
+        gram_per_piece = safe_float(edit_row.get("1個(g)", 0))
+        per_100g = safe_float(edit_row.get(col, 0))
+
+        if gram_per_piece <= 0:
+            return default
+
+        per_piece = per_100g * gram_per_piece / 100
+        return str(per_piece)
+
+    food_name = st.text_input("メニュー名 *", value=get_default("食材", ""))
+    unit_g = st.text_input("1個あたりの分量(g) *", value=get_default("1個(g)", ""))
+
+    st.caption("※ 栄養素はすべて 1個あたり で入力してください")
+
+    kcal = st.text_input("カロリー(kcal/1個) *", value=get_default_per_piece("エネルギー", ""))
+    protein = st.text_input("たんぱく質(g/1個)", value=get_default_per_piece("たんぱく質", ""))
+    fat = st.text_input("脂質(g/1個)", value=get_default_per_piece("脂質", ""))
+    carb = st.text_input("炭水化物(g/1個)", value=get_default_per_piece("炭水化物", ""))
+    calcium = st.text_input("カルシウム(mg/1個)", value=get_default_per_piece("カルシウム", ""))
+    iron = st.text_input("鉄(mg/1個)", value=get_default_per_piece("鉄", ""))
+    vitA = st.text_input("ビタミンA(μg/1個)", value=get_default_per_piece("ビタミンA", ""))
+    vitE = st.text_input("ビタミンE(mg/1個)", value=get_default_per_piece("ビタミンE", ""))
+    vitB1 = st.text_input("ビタミンB1(mg/1個)", value=get_default_per_piece("ビタミンB1", ""))
+    vitB2 = st.text_input("ビタミンB2(mg/1個)", value=get_default_per_piece("ビタミンB2", ""))
+    vitC = st.text_input("ビタミンC(mg/1個)", value=get_default_per_piece("ビタミンC", ""))
+    fiber = st.text_input("食物繊維(g/1個)", value=get_default_per_piece("食物繊維", ""))
+    salt = st.text_input("食塩相当量(g/1個)", value=get_default_per_piece("食塩相当量", ""))
 
     col1, col2 = st.columns(2)
 
@@ -3083,26 +3102,38 @@ def show_my_item_form():
                 st.error("メニュー名は必須です")
                 return
 
-            if str(kcal).strip() == "":
-                st.error("100gあたりカロリーは必須です")
+            if str(unit_g).strip() == "":
+                st.error("1個あたりの分量(g)は必須です")
                 return
+
+            gram_per_piece = safe_float(unit_g)
+            if gram_per_piece <= 0:
+                st.error("1個あたりの分量(g)は0より大きい値を入力してください")
+                return
+
+            if str(kcal).strip() == "":
+                st.error("1個あたりカロリーは必須です")
+                return
+
+            def per_piece_to_per_100g(x):
+                return empty_to_zero(x) * 100 / gram_per_piece
 
             item_data = {
                 "食材": food_name.strip(),
-                "エネルギー": empty_to_zero(kcal),
-                "たんぱく質": empty_to_zero(protein),
-                "脂質": empty_to_zero(fat),
-                "炭水化物": empty_to_zero(carb),
-                "カルシウム": empty_to_zero(calcium),
-                "鉄": empty_to_zero(iron),
-                "ビタミンA": empty_to_zero(vitA),
-                "ビタミンE": empty_to_zero(vitE),
-                "ビタミンB1": empty_to_zero(vitB1),
-                "ビタミンB2": empty_to_zero(vitB2),
-                "ビタミンC": empty_to_zero(vitC),
-                "食物繊維": empty_to_zero(fiber),
-                "食塩相当量": empty_to_zero(salt),
-                "1個(g)": empty_to_zero(unit_g),
+                "エネルギー": per_piece_to_per_100g(kcal),
+                "たんぱく質": per_piece_to_per_100g(protein),
+                "脂質": per_piece_to_per_100g(fat),
+                "炭水化物": per_piece_to_per_100g(carb),
+                "カルシウム": per_piece_to_per_100g(calcium),
+                "鉄": per_piece_to_per_100g(iron),
+                "ビタミンA": per_piece_to_per_100g(vitA),
+                "ビタミンE": per_piece_to_per_100g(vitE),
+                "ビタミンB1": per_piece_to_per_100g(vitB1),
+                "ビタミンB2": per_piece_to_per_100g(vitB2),
+                "ビタミンC": per_piece_to_per_100g(vitC),
+                "食物繊維": per_piece_to_per_100g(fiber),
+                "食塩相当量": per_piece_to_per_100g(salt),
+                "1個(g)": gram_per_piece,
                 "source": "my_item"
             }
 
@@ -3131,6 +3162,8 @@ def show_my_item_form():
             st.session_state.my_item_edit_name = None
             st.session_state.page = "my_items"
             st.rerun()
+
+
 
 if st.session_state.page == "dashboard":
     show_dashboard()
