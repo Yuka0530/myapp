@@ -167,52 +167,37 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.botto
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 
-.meal-row-anchor {
-    height: 0;
-    margin: 0;
-    padding: 0;
-}
-
-/* anchor の直後に出る header 用 columns だけを狙う */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] > div[data-testid="stHorizontalBlock"] {
+/* 1. カレンダーなどの親要素（HorizontalBlock）の折り返しを禁止 */
+[data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
-    align-items: center !important;
-    gap: 0.35rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important; /* 縦方向の中央揃え */
 }
 
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"] {
-    min-width: 0 !important;
+/* 2. 各カラムが画面幅に合わせて縮むように設定 */
+[data-testid="stColumn"] {
+    min-width: 0px !important;
+    flex-shrink: 1 !important;
 }
 
-/* 1列目: 朝食 */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(1) {
-    flex: 4.6 1 0% !important;
+/* タイトル */
+.custom-meal-title {
+    font-size: 1.35rem !important;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* 2列目: kcal */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(2) {
-    flex: 2.0 1 0% !important;
-}
-
-/* 3列目: 編集 */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] [data-testid="stColumn"]:nth-child(3) {
-    flex: 0.75 0 0% !important;
-}
-
-/* 編集ボタンを小さく */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] .stButton > button {
-    min-height: 32px !important;
-    height: 32px !important;
-    padding: 0.08rem 0.2rem !important;
-    font-size: 0.85rem !important;
-    border-radius: 10px !important;
-    white-space: nowrap !important;
-}
-
-/* ボタン内余白も少し詰める */
-.meal-row-anchor + div[data-testid="stLayoutWrapper"] .stButton button p {
-    margin: 0 !important;
-    line-height: 1 !important;
+/* kcal */
+.custom-kcal {
+    text-align: right;
+    font-size: 0.92rem !important;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1.1;
 }
 
 /* 見出し */
@@ -233,6 +218,15 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.botto
     white-space: nowrap;
     line-height: 1.1;
 }
+            
+/* 全てのカラムコンテナを横並び強制 */
+[data-testid="column"] {
+    #min-width: 0px !important;
+}
+/* 親要素をFlexboxにして折り返しを禁止する */
+[data-testid="stHorizontalBlock"] {
+    #flex-wrap: nowrap !important;
+}            
 
 @media (max-width: 768px) {
     .meal-title {
@@ -839,9 +833,9 @@ def show_dashboard():
         header_box = st.container()
 
         with header_box:
-            st.markdown('<div class="meal-row-anchor"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="meal-head-anchor"></div>', unsafe_allow_html=True)
 
-            col1, col2, col3 = st.columns([6, 1, 1], vertical_alignment="center")
+            col1, col2, col3 = st.columns([3, 1, 1], vertical_alignment="center", gap="small")
 
             with col1:
                 st.markdown(
