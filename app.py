@@ -16,8 +16,6 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
-st.write("tesseract_cmd:", pytesseract.pytesseract.tesseract_cmd)
-st.write("exists default path:", os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"))
 
 st.set_page_config(
     page_title="栄養計算アプリ",
