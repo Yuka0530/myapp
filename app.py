@@ -16,6 +16,8 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
+st.write("tesseract_cmd:", pytesseract.pytesseract.tesseract_cmd)
+st.write("exists default path:", os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"))
 
 st.set_page_config(
     page_title="栄養計算アプリ",
@@ -476,6 +478,36 @@ def load_meal_log():
 
     return df
 
+def save_meal_log_full(date, meal_type, recipe, servings, nut):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("meal_log")
+
+    data = sheet.get_all_values()
+    new_id = len(data)
+
+    sheet.append_row([
+        new_id,
+        str(date),
+        meal_type,
+        recipe,
+        servings,
+        nut["kcal"],
+        nut["protein"],
+        nut["fat"],
+        nut["carb"],
+        nut["calcium"],
+        nut["iron"],
+        nut["vitA"],
+        nut["vitE"],
+        nut["vitB1"],
+        nut["vitB2"],
+        nut["vitC"],
+        nut["fiber"],
+        nut["salt"]
+    ])
+
+    return new_id
+
 # =========================
 #meal_logシートに保存する関数
 # =========================
@@ -588,30 +620,29 @@ def divide_nutrition(nut, servings):
 # =========================
 
 def update_meal_log(meal_id, nut):
-
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
 
     data = sheet.get_all_values()
 
     for i, row in enumerate(data):
-
         if str(row[0]) == str(meal_id):
-
-            sheet.update_cell(i+1, 6, nut["kcal"])
-            sheet.update_cell(i+1, 7, nut["protein"])
-            sheet.update_cell(i+1, 8, nut["fat"])
-            sheet.update_cell(i+1, 9, nut["carb"])
-            sheet.update_cell(i+1, 10, nut["calcium"])
-            sheet.update_cell(i+1, 11, nut["iron"])
-            sheet.update_cell(i+1, 12, nut["vitA"])
-            sheet.update_cell(i+1, 13, nut["vitE"])
-            sheet.update_cell(i+1, 14, nut["vitB1"])
-            sheet.update_cell(i+1, 15, nut["vitB2"])
-            sheet.update_cell(i+1, 16, nut["vitC"])
-            sheet.update_cell(i+1, 17, nut["fiber"])
-            sheet.update_cell(i+1, 18, nut["salt"])
-
+            values = [[
+                nut["kcal"],
+                nut["protein"],
+                nut["fat"],
+                nut["carb"],
+                nut["calcium"],
+                nut["iron"],
+                nut["vitA"],
+                nut["vitE"],
+                nut["vitB1"],
+                nut["vitB2"],
+                nut["vitC"],
+                nut["fiber"],
+                nut["salt"]
+            ]]
+            sheet.update(f"F{i+1}:R{i+1}", values)
             break
 
  # =========================
@@ -706,21 +737,24 @@ def update_meal_log_full(meal_id, recipe, servings, nut):
 
     for i, row in enumerate(data):
         if str(row[0]) == str(meal_id):
-            sheet.update_cell(i+1, 4, recipe)       # recipe
-            sheet.update_cell(i+1, 5, servings)     # servings
-            sheet.update_cell(i+1, 6, nut["kcal"])
-            sheet.update_cell(i+1, 7, nut["protein"])
-            sheet.update_cell(i+1, 8, nut["fat"])
-            sheet.update_cell(i+1, 9, nut["carb"])
-            sheet.update_cell(i+1, 10, nut["calcium"])
-            sheet.update_cell(i+1, 11, nut["iron"])
-            sheet.update_cell(i+1, 12, nut["vitA"])
-            sheet.update_cell(i+1, 13, nut["vitE"])
-            sheet.update_cell(i+1, 14, nut["vitB1"])
-            sheet.update_cell(i+1, 15, nut["vitB2"])
-            sheet.update_cell(i+1, 16, nut["vitC"])
-            sheet.update_cell(i+1, 17, nut["fiber"])
-            sheet.update_cell(i+1, 18, nut["salt"])
+            values = [[
+                recipe,
+                servings,
+                nut["kcal"],
+                nut["protein"],
+                nut["fat"],
+                nut["carb"],
+                nut["calcium"],
+                nut["iron"],
+                nut["vitA"],
+                nut["vitE"],
+                nut["vitB1"],
+                nut["vitB2"],
+                nut["vitC"],
+                nut["fiber"],
+                nut["salt"]
+            ]]
+            sheet.update(f"D{i+1}:R{i+1}", values)
             break
 
 # =========================
@@ -734,15 +768,6 @@ def copy_meal_from_history(source_meal_id, target_date, target_meal_type):
 
     source_ingredients = get_meal_ingredients_by_id(source_meal_id)
 
-    # 新しい meal_log を作成
-    new_meal_id = save_meal_log_base(
-        target_date,
-        target_meal_type,
-        source_log["recipe"],
-        servings=safe_float(source_log.get("servings", 1)) or 1
-    )
-
-    # 材料コピー
     ingredients_to_save = []
     for ing in source_ingredients:
         ingredients_to_save.append({
@@ -750,21 +775,21 @@ def copy_meal_from_history(source_meal_id, target_date, target_meal_type):
             "gram": safe_float(ing["gram"])
         })
 
-    save_ingredients(new_meal_id, ingredients_to_save)
-
-    # 栄養は再計算
     nutrition_dict = load_nutrition()
     total_nut = calc_nutrition(ingredients_to_save, nutrition_dict)
 
     servings = safe_float(source_log.get("servings", 1)) or 1
     per_person_nut = divide_nutrition(total_nut, servings)
 
-    update_meal_log_full(
-        new_meal_id,
+    new_meal_id = save_meal_log_full(
+        target_date,
+        target_meal_type,
         source_log["recipe"],
-        servings,
-        per_person_nut
+        servings=servings,
+        nut=per_person_nut
     )
+
+    save_ingredients(new_meal_id, ingredients_to_save)
 
     load_meal_log.clear()
     load_meal_ingredients.clear()
@@ -1613,22 +1638,18 @@ def show_meal_add():
             all_mapping_items = []
 
             for item in save_queue:
-                meal_id = save_meal_log_base(
-                    st.session_state.selected_date,
-                    st.session_state.meal_type,
-                    item["title"],
-                    servings=item["servings"]
-                )
-
-                save_ingredients(meal_id, item["ingredients"])
-
                 total_nut = calc_nutrition(item["ingredients"], nutrition_dict)
                 per_person_nut = divide_nutrition(total_nut, item["servings"])
 
-                update_meal_log(
-                    meal_id,
-                    per_person_nut
+                meal_id = save_meal_log_full(
+                    st.session_state.selected_date,
+                    st.session_state.meal_type,
+                    item["title"],
+                    servings=item["servings"],
+                    nut=per_person_nut
                 )
+
+                save_ingredients(meal_id, item["ingredients"])
 
                 if item["type"] == "recipe":
                     all_mapping_items.extend(item.get("mapping_items", []))
@@ -2460,28 +2481,24 @@ def show_recipe_search():
                         "gram": gram
                     })
             
-                meal_id = save_meal_log_base(
-                    date,
-                    meal,
-                    title,
-                    servings=servings_selected
-                )
-                
-                save_ingredients(
-                    meal_id,
-                    ingredients_for_save
-                )
-                
                 total_nut = calc_nutrition(
                     ingredients_for_save,
                     nutrition_dict
                 )
-                
+
                 per_person_nut = divide_nutrition(total_nut, servings_selected)
-                
-                update_meal_log(
+
+                meal_id = save_meal_log_full(
+                    date,
+                    meal,
+                    title,
+                    servings=servings_selected,
+                    nut=per_person_nut
+                )
+
+                save_ingredients(
                     meal_id,
-                    per_person_nut
+                    ingredients_for_save
                 )
             
                 load_meal_log.clear()
@@ -2613,28 +2630,24 @@ def show_recipe_search():
                         "gram": gram
                     })
         
-                meal_id = save_meal_log_base(
-                    date,
-                    meal,
-                    r["title"],
-                    servings=r["servings"]
-                )
-                
-                save_ingredients(
-                    meal_id,
-                    ingredients_for_save
-                )
-                
                 total_nut = calc_nutrition(
                     ingredients_for_save,
                     nutrition_dict
                 )
-                
+
                 per_person_nut = divide_nutrition(total_nut, r["servings"])
-                
-                update_meal_log(
+
+                meal_id = save_meal_log_full(
+                    date,
+                    meal,
+                    r["title"],
+                    servings=r["servings"],
+                    nut=per_person_nut
+                )
+
+                save_ingredients(
                     meal_id,
-                    per_person_nut
+                    ingredients_for_save
                 )
         
             load_meal_log.clear()
@@ -3069,21 +3082,17 @@ def add_my_item_to_meal(item_row, target_date, target_meal_type):
         "gram": gram
     }]
 
-    meal_id = save_meal_log_base(
+    nut = calc_nutrition(ingredients, nutrition_dict)
+
+    meal_id = save_meal_log_full(
         target_date,
         target_meal_type,
         food_name,
-        servings=1
+        servings=1,
+        nut=nut
     )
 
     save_ingredients(meal_id, ingredients)
-
-    nut = calc_nutrition(ingredients, nutrition_dict)
-
-    update_meal_log(
-        meal_id,
-        nut
-    )
 
     load_meal_log.clear()
     load_meal_ingredients.clear()
