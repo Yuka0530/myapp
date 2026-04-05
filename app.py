@@ -344,7 +344,8 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
             return count * float(gram_per_unit)
     
     unit_match = re.search(r'(\d+(?:\.\d+)?)', text)
-    #st.write(unit_match)
+    #st.write(unit_match.group(1))
+    #st.write(food_name)
 
     if unit_match and food_name and nutrition_dict:
 
@@ -353,6 +354,7 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
         if food_name in nutrition_dict:
 
             gram_per_unit = nutrition_dict[food_name].get("1個(g)", None)
+            #st.write(gram_per_unit)
             
             if gram_per_unit is None or pd.isna(gram_per_unit) or gram_per_unit in ["", "-", 0]:
                 return 0.0
@@ -2665,7 +2667,48 @@ def show_recipe_search():
             st.session_state.page = "dashboard"
             st.rerun()
 
-#登録内容の確認画面
+# =========================
+# meal を丸ごと削除する関数
+# =========================
+def delete_meal(meal_id):
+    client = connect_gsheet()
+
+    # meal_log 側
+    log_sheet = client.open("food_mapping").worksheet("meal_log")
+    log_data = log_sheet.get_all_values()
+    log_header = log_data[0]
+    log_rows = log_data[1:]
+
+    kept_log_rows = []
+    for row in log_rows:
+        if str(row[0]) != str(meal_id):
+            kept_log_rows.append(row)
+
+    log_sheet.clear()
+    log_sheet.append_row(log_header)
+    if kept_log_rows:
+        log_sheet.append_rows(kept_log_rows)
+
+    # meal_ingredients 側
+    ing_sheet = client.open("food_mapping").worksheet("meal_ingredients")
+    ing_data = ing_sheet.get_all_values()
+    ing_header = ing_data[0]
+    ing_rows = ing_data[1:]
+
+    kept_ing_rows = []
+    for row in ing_rows:
+        if str(row[0]) != str(meal_id):
+            kept_ing_rows.append(row)
+
+    ing_sheet.clear()
+    ing_sheet.append_row(ing_header)
+    if kept_ing_rows:
+        ing_sheet.append_rows(kept_ing_rows)
+
+    load_meal_log.clear()
+    load_meal_ingredients.clear()
+
+# 登録内容の確認画面
 def show_saved_meal_confirm():
     st.title("登録内容の確認")
 
@@ -2689,18 +2732,71 @@ def show_saved_meal_confirm():
     st.subheader(f"{st.session_state.selected_date} {st.session_state.meal_type}")
     st.write(f"合計 {rows['kcal_num'].sum():.1f} kcal")
 
+    multiplier_options = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
     for _, r in rows.iterrows():
-        col1, col2 = st.columns([5, 1])
+        meal_id = r["id"]
+        recipe = r["recipe"]
+        servings = safe_float(r.get("servings", 1)) or 1
 
-        with col1:
-            st.write(f"**{r['recipe']}**")
-            st.caption(f"{r['kcal_num']:.1f} kcal")
+        st.divider()
+        col_del, col_main, col_ratio, col_apply, col_edit = st.columns([0.8, 4.8, 1.8, 1.3, 1.3])
 
-        with col2:
-            if st.button("編集", key=f"edit_saved_{r['id']}"):
-                st.session_state.edit_meal_id = r["id"]
+        with col_del:
+            if st.button("×", key=f"delete_saved_{meal_id}"):
+                delete_meal(meal_id)
+                st.success("削除しました")
+                st.rerun()
+
+        with col_main:
+            st.write(f"**{recipe}**")
+            st.caption(f"{safe_float(r['kcal_num']):.1f} kcal")
+
+        with col_ratio:
+            selected_ratio = st.selectbox(
+                "倍率",
+                multiplier_options,
+                index=2,   # 1.0
+                key=f"ratio_saved_{meal_id}"
+            )
+
+        with col_apply:
+            if st.button("適用", key=f"apply_saved_{meal_id}"):
+                ingredients = get_meal_ingredients_by_id(meal_id)
+
+                scaled_ingredients = []
+                for ing in ingredients:
+                    scaled_ingredients.append({
+                        "food": ing["food"],
+                        "gram": round(safe_float(ing["gram"]) * float(selected_ratio), 1)
+                    })
+
+                replace_meal_ingredients(meal_id, scaled_ingredients)
+
+                nutrition_dict = load_nutrition()
+                total_nut = calc_nutrition(scaled_ingredients, nutrition_dict)
+                per_person_nut = divide_nutrition(total_nut, servings)
+
+                update_meal_log_full(
+                    meal_id,
+                    recipe,
+                    servings,
+                    per_person_nut
+                )
+
+                load_meal_log.clear()
+                load_meal_ingredients.clear()
+
+                st.success(f"{selected_ratio}倍に更新しました")
+                st.rerun()
+
+        with col_edit:
+            if st.button("編集", key=f"edit_saved_{meal_id}"):
+                st.session_state.edit_meal_id = meal_id
                 st.session_state.page = "saved_meal_edit"
                 st.rerun()
+
+    st.divider()
 
     if st.button("← 戻る"):
         st.session_state.page = "meal_add"
