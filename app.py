@@ -226,7 +226,41 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.botto
 /* 親要素をFlexboxにして折り返しを禁止する */
 [data-testid="stHorizontalBlock"] {
     #flex-wrap: nowrap !important;
-}            
+}
+
+/* selectbox全体の文字を小さめに */
+div[data-baseweb="select"] * {
+    font-size: 11px !important;
+}
+
+/* 選択済みの表示部分を横スクロール可能にする */
+div[data-baseweb="select"] > div {
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+}
+
+/* 選択済みテキスト */
+div[data-baseweb="select"] span {
+    white-space: nowrap !important;
+}
+
+/* プルダウン候補側も横スクロール */
+body div[data-baseweb="popover"] ul,
+body div[data-baseweb="popover"] li,
+body div[data-baseweb="popover"] div,
+body div[data-baseweb="popover"] span {
+    white-space: nowrap !important;
+    overflow-x: auto !important;
+    font-size: 11px !important;
+}
+
+/* 分量の下に出すkcal表示 */
+.ing-kcal {
+    color: #8a7b71;
+    font-size: 0.88rem;
+    margin-top: -0.2rem;
+    margin-bottom: 0.6rem;
+}
 
 @media (max-width: 768px) {
     .meal-title {
@@ -1602,11 +1636,22 @@ def show_meal_add():
                             nutrition_dict=nutrition_dict
                         )
 
+                                # 10g単位に寄せる
+                        default_g_rounded = round(float(default_g) / 10) * 10 if float(default_g) > 0 else 0.0
+
                         gram = st.number_input(
                             "分量（g）",
-                            value=float(default_g),
-                            step=1.0,
+                            value=float(default_g_rounded),
+                            step=10.0,
                             key=f"{recipe_key}_gram_{j}"
+                        )
+
+                        nut = nutrition_dict.get(selected_food, {})
+                        kcal = safe_float(nut.get("エネルギー", 0)) * gram / 100
+
+                        st.markdown(
+                            f'<div class="ing-kcal">約 {kcal:.1f} kcal</div>',
+                            unsafe_allow_html=True
                         )
 
                         selected_ingredients.append({
