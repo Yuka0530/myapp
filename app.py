@@ -263,15 +263,18 @@ body div[data-baseweb="popover"] span {
 }
             
 /* =========================
-   固定ヘッダー
+   食事追加画面の上部固定ヘッダー
 ========================= */
-.meal-fixed-header {
-    position: fixed;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(1100px, calc(100% - 20px));
-    z-index: 9998;
+
+.meal-sticky-wrap {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 100;
+    padding-bottom: 0.5rem;
+    background: linear-gradient(180deg, #fffaf7 70%, rgba(255,250,247,0));
+}
+
+.meal-sticky-bar {
     background: rgba(255,255,255,0.96);
     backdrop-filter: blur(10px);
     border: 1px solid #eadfd7;
@@ -280,18 +283,8 @@ body div[data-baseweb="popover"] span {
     padding: 10px 14px;
 }
 
-.meal-fixed-header-inner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.meal-fixed-back {
-    flex: 0 0 auto;
-}
-
-.meal-fixed-title {
-    font-size: 1.05rem;
+.meal-sticky-title {
+    font-size: 1.02rem;
     font-weight: 700;
     color: #3a312b;
     line-height: 1.2;
@@ -299,41 +292,22 @@ body div[data-baseweb="popover"] span {
     overflow-x: auto;
 }
 
-.meal-fixed-spacer {
-    height: 84px;
+.meal-sticky-title::-webkit-scrollbar {
+    height: 4px;
 }
 
 @media (max-width: 768px) {
-    .meal-fixed-header {
-        top: 8px;
-        width: calc(100% - 12px);
-        padding: 9px 12px;
+    .meal-sticky-bar {
         border-radius: 16px;
+        padding: 9px 12px;
     }
 
-    .meal-fixed-title {
-        font-size: 0.96rem;
-    }
-
-    .meal-fixed-spacer {
-        height: 78px;
+    .meal-sticky-title {
+        font-size: 0.95rem;
     }
 }
 
-@media (max-width: 768px) {
-    .meal-title {
-        font-size: 1.8rem;
-    }
 
-    .meal-kcal-box {
-        min-width: 100px;
-        padding: 8px 12px;
-    }
-
-    .meal-kcal-value {
-        font-size: 1.2rem;
-    }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1455,9 +1429,9 @@ def show_meal_add():
         return df
     
 
-    render_meal_fixed_header(back_page="dashboard")
-    st.markdown("### 食事を追加")
-    #st.title(f"{st.session_state.meal_type} を追加")
+    #render_meal_fixed_header(back_page="dashboard")
+    #st.markdown("### 食事を追加")
+    st.title(f"{st.session_state.meal_type} を追加")
 
     with st.expander("この画面でできること"):
         st.markdown("""
