@@ -261,6 +261,64 @@ body div[data-baseweb="popover"] span {
     margin-top: -0.2rem;
     margin-bottom: 0.6rem;
 }
+            
+/* =========================
+   固定ヘッダー
+========================= */
+.meal-fixed-header {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1100px, calc(100% - 20px));
+    z-index: 9998;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(10px);
+    border: 1px solid #eadfd7;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    padding: 10px 14px;
+}
+
+.meal-fixed-header-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.meal-fixed-back {
+    flex: 0 0 auto;
+}
+
+.meal-fixed-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #3a312b;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
+.meal-fixed-spacer {
+    height: 84px;
+}
+
+@media (max-width: 768px) {
+    .meal-fixed-header {
+        top: 8px;
+        width: calc(100% - 12px);
+        padding: 9px 12px;
+        border-radius: 16px;
+    }
+
+    .meal-fixed-title {
+        font-size: 0.96rem;
+    }
+
+    .meal-fixed-spacer {
+        height: 78px;
+    }
+}
 
 @media (max-width: 768px) {
     .meal-title {
@@ -840,6 +898,61 @@ if "edit_meal_id" not in st.session_state:
 if "my_item_edit_name" not in st.session_state:
     st.session_state.my_item_edit_name = None
 
+def format_jp_date_with_weekday(d):
+    ts = pd.to_datetime(d)
+    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+    wd = weekday_map[ts.weekday()]
+    return f"{ts.month}月{ts.day}日({wd})"
+
+def render_meal_fixed_header(back_page="dashboard", show_back=True):
+    selected_date = st.session_state.get("selected_date", pd.Timestamp.today())
+    meal_type = st.session_state.get("meal_type", "")
+
+    title_text = f"{format_jp_date_with_weekday(selected_date)} {meal_type}"
+
+    header = st.container()
+    with header:
+        col1, col2 = st.columns([1.2, 8], vertical_alignment="center")
+
+        with col1:
+            if show_back:
+                if st.button("←", key=f"fixed_back_{back_page}", use_container_width=True):
+                    st.session_state.page = back_page
+                    st.rerun()
+
+        with col2:
+            st.markdown(
+                f"""
+                <div class="meal-fixed-title">
+                    {title_text}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # container自体に固定スタイルを当てるための目印
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stVerticalBlock"]:has(.meal-fixed-title) {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(1100px, calc(100% - 20px));
+            z-index: 9998;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(10px);
+            border: 1px solid #eadfd7;
+            border-radius: 18px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            padding: 10px 14px;
+        }
+        </style>
+        <div class="meal-fixed-spacer"></div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # =========================
 # ダッシュボード
@@ -1342,8 +1455,9 @@ def show_meal_add():
         return df
     
 
-
-    st.title(f"{st.session_state.meal_type} を追加")
+    render_meal_fixed_header(back_page="dashboard")
+    st.markdown("### 食事を追加")
+    #st.title(f"{st.session_state.meal_type} を追加")
 
     with st.expander("この画面でできること"):
         st.markdown("""
