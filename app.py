@@ -15,7 +15,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
-
+import shutil
+import platform
 
 # Windowsローカルだけ固定パスを使う
 if platform.system() == "Windows":
