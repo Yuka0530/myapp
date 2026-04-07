@@ -16,6 +16,7 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 st.set_page_config(
     page_title="栄養計算アプリ",
@@ -62,12 +63,13 @@ p, label, div, span {
 .stButton > button {
     border-radius: 14px;
     border: 1px solid #eadfd7;
-    background: white;
+    background: rgba(255,255,255,0.72);
     color: #4b4038;
     font-weight: 600;
     padding: 0.5rem 1rem;
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
     transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
 }
 
 .stButton > button:hover {
@@ -266,47 +268,57 @@ body div[data-baseweb="popover"] span {
    食事追加画面の上部固定ヘッダー
 ========================= */
 
-.meal-sticky-wrap {
-    position: sticky;
-    top: 0.5rem;
-    z-index: 100;
-    padding-bottom: 0.5rem;
-    background: linear-gradient(180deg, #fffaf7 70%, rgba(255,250,247,0));
+.top-header-anchor {
+    height: 0;
 }
 
-.meal-sticky-bar {
-    background: rgba(255,255,255,0.96);
+.top-header-spacer {
+    height: 88px;
+}
+
+/* anchor を含む親ブロック全体を固定 */
+div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.top-header-anchor) {
+    position: fixed;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1000px, calc(100% - 24px));
+    z-index: 9999;
+    background: rgba(255, 250, 250, 0.4);
+    -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(10px);
-    border: 1px solid #eadfd7;
+    #border: 1px solid #eadfd7;
     border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
     padding: 10px 14px;
+    #box-shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 
-.meal-sticky-title {
-    font-size: 1.02rem;
+/* 中の横並びを崩れにくくする */
+div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.top-header-anchor) [data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+}
+
+div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.top-header-anchor) [data-testid="stColumn"] {
+    min-width: 0 !important;
+    flex-shrink: 1 !important;
+}
+
+.top-header-title {
+    font-size: 1.15rem;
     font-weight: 700;
-    color: #3a312b;
-    line-height: 1.2;
     white-space: nowrap;
-    overflow-x: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
 }
 
-.meal-sticky-title::-webkit-scrollbar {
-    height: 4px;
+.top-header-sub {
+    color: #8a7b71;
+    font-size: 0.85rem;
+    margin-top: 2px;
+    line-height: 1.1;
 }
-
-@media (max-width: 768px) {
-    .meal-sticky-bar {
-        border-radius: 16px;
-        padding: 9px 12px;
-    }
-
-    .meal-sticky-title {
-        font-size: 0.95rem;
-    }
-}
-
 
 </style>
 """, unsafe_allow_html=True)
@@ -872,61 +884,83 @@ if "edit_meal_id" not in st.session_state:
 if "my_item_edit_name" not in st.session_state:
     st.session_state.my_item_edit_name = None
 
-def format_jp_date_with_weekday(d):
-    ts = pd.to_datetime(d)
-    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
-    wd = weekday_map[ts.weekday()]
-    return f"{ts.month}月{ts.day}日({wd})"
+def format_meal_header_date(date_value):
+    if date_value is None:
+        return ""
+    ts = pd.Timestamp(date_value)
+    jp_week = ["月", "火", "水", "木", "金", "土", "日"]
+    return f"{ts.month}月{ts.day}日({jp_week[ts.weekday()]})"
 
-def render_meal_fixed_header(back_page="dashboard", show_back=True):
-    selected_date = st.session_state.get("selected_date", pd.Timestamp.today())
+
+def clear_meal_add_temp_states(clear_recipe_page=False, clear_my_item_edit=False):
+    for k in [
+        "search_step",
+        "search_words",
+        "search_results",
+        "remaining_words",
+        "selected_foods_temp",
+        "current_word",
+        "history_filter_mode",
+        "meal_add_recipe_selected_foods",
+    ]:
+        if k in st.session_state:
+            del st.session_state[k]
+
+    for i in range(10):
+        key = f"word_{i}"
+        if key in st.session_state:
+            del st.session_state[key]
+
+    if clear_recipe_page:
+        for k in [
+            "recipe_page_init",
+            "selected_foods",
+            "ingredients",
+            "manual_recipe_urls",
+            "manual_recipe_url_input",
+            "recipe_ingredients_state",
+            "recipe_delete_target",
+            "recipes_current_page",
+        ]:
+            if k in st.session_state:
+                del st.session_state[k]
+
+    if clear_my_item_edit and "my_item_edit_name" in st.session_state:
+        del st.session_state["my_item_edit_name"]
+
+
+def render_meal_fixed_header(back_page="dashboard", clear_on_back=False, sublabel=""):
+    selected_date = st.session_state.get("selected_date")
     meal_type = st.session_state.get("meal_type", "")
+    title_text = f"{format_meal_header_date(selected_date)} {meal_type}".strip()
 
-    title_text = f"{format_jp_date_with_weekday(selected_date)} {meal_type}"
+    header_box = st.container()
 
-    header = st.container()
-    with header:
-        col1, col2 = st.columns([1.2, 8], vertical_alignment="center")
+    with header_box:
+        st.markdown('<div class="top-header-anchor"></div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1.5, 8.5], vertical_alignment="center")
 
         with col1:
-            if show_back:
-                if st.button("←", key=f"fixed_back_{back_page}", use_container_width=True):
-                    st.session_state.page = back_page
-                    st.rerun()
+            if st.button("←", key=f"top_back_{back_page}_{st.session_state.get('page','')}"):
+                if clear_on_back:
+                    clear_meal_add_temp_states(
+                        clear_recipe_page=True,
+                        clear_my_item_edit=True
+                    )
+                st.session_state.page = back_page
+                st.rerun()
 
         with col2:
             st.markdown(
                 f"""
-                <div class="meal-fixed-title">
-                    {title_text}
-                </div>
+                <div class="top-header-title">{title_text}</div>
+                {f'<div class="top-header-sub">{sublabel}</div>' if sublabel else ''}
                 """,
                 unsafe_allow_html=True
             )
 
-    # container自体に固定スタイルを当てるための目印
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stVerticalBlock"]:has(.meal-fixed-title) {
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: min(1100px, calc(100% - 20px));
-            z-index: 9998;
-            background: rgba(255,255,255,0.96);
-            backdrop-filter: blur(10px);
-            border: 1px solid #eadfd7;
-            border-radius: 18px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-            padding: 10px 14px;
-        }
-        </style>
-        <div class="meal-fixed-spacer"></div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="top-header-spacer"></div>', unsafe_allow_html=True)
 
 # =========================
 # ダッシュボード
@@ -1428,10 +1462,14 @@ def show_meal_add():
     
         return df
     
+    render_meal_fixed_header(
+        back_page="dashboard",
+        clear_on_back=True,
+        sublabel=""
+    )
 
-    #render_meal_fixed_header(back_page="dashboard")
-    #st.markdown("### 食事を追加")
-    st.title(f"{st.session_state.meal_type} を追加")
+    
+    #st.title(f"{st.session_state.meal_type} を追加")
 
     with st.expander("この画面でできること"):
         st.markdown("""
@@ -1953,15 +1991,20 @@ def show_recipe_search():
     if "recipe_delete_target" not in st.session_state:
         st.session_state.recipe_delete_target = None
     
-    st.title("デリッシュ献立スクショ → 栄養計算")
+    render_meal_fixed_header(
+        back_page="meal_add",
+        clear_on_back=False,
+        sublabel=""
+    )    
+    #st.title("デリッシュ献立スクショ → 栄養計算")
     st.caption("スクリーンショットやURLからレシピを取り込み、材料を調整して栄養計算できます")
     
-    if st.button("←戻る"):
-        st.session_state.recipes_current_page = {}
-        st.session_state.manual_recipe_urls = []
-        st.session_state.manual_recipe_url_input = ""
-        st.session_state.page = "meal_add"
-        st.rerun()
+    # if st.button("←戻る"):
+    #     st.session_state.recipes_current_page = {}
+    #     st.session_state.manual_recipe_urls = []
+    #     st.session_state.manual_recipe_url_input = ""
+    #     st.session_state.page = "meal_add"
+    #     st.rerun()
 
     
     st.markdown("""
@@ -2129,19 +2172,6 @@ def show_recipe_search():
         return title, ingredients, servings
     
 
-    
-
-    
-    
-    # =========================
-    # 分量解析
-    # =========================
-    import re
-    
-
-
-    
-
 
     
     # =========================
@@ -2183,8 +2213,9 @@ def show_recipe_search():
     
     
     file = st.file_uploader("スクショアップ", type=["png", "jpg", "jpeg"])
-    
-    st.header("①タイトル抽出")
+
+    if file:
+        st.header("①タイトル抽出")
     
     titles = []
     
@@ -3235,7 +3266,10 @@ def add_my_item_to_meal(item_row, target_date, target_meal_type):
 
 #マイアイテム一覧画面
 def show_my_items():
+    render_meal_fixed_header(back_page="meal_add", clear_on_back=False)
+    
     st.title("⭐マイアイテム")
+    st.caption("よく使う食材や自作メニューを追加できます")
 
     df = get_my_items()
 
@@ -3297,6 +3331,7 @@ def show_my_items():
 
 #マイアイテム登録フォーム画面
 def show_my_item_form():
+    render_meal_fixed_header(back_page="my_items", clear_on_back=False)
     st.title("マイアイテム登録")
 
     nutrition_df = load_nutrition_df()
