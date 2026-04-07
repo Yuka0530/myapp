@@ -153,22 +153,26 @@ hr {
     min-height: 60px;
 }
 
-/* 親コンテナ全体を固定 */
+/* 下部固定バー */
 div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.bottom-bar-anchor) {
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 14px;
-    width: min(1000px, calc(100% - 24px));
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    width: 100%;
     z-index: 9999;
-    background: rgba(255,255,255,0.94);
-    backdrop-filter: blur(10px);
-    border: 1px solid #eadfd7;
-    border-radius: 18px;
-    padding: 12px 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-}
 
+    background: rgba(255,255,255,0.96);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+
+    border: none;
+    border-radius: 0;
+    padding: 0px 26px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 18px rgba(0,0,0,0.06);
+}
+            
 /* 1. カレンダーなどの親要素（HorizontalBlock）の折り返しを禁止 */
 [data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
@@ -2149,8 +2153,13 @@ def show_recipe_search():
         headers={"User-Agent":"Mozilla/5.0"}
         res=requests.get(url,headers=headers)
         soup=BeautifulSoup(res.text,"html.parser")
+
+        title_el = soup.select_one("span.title") or soup.select_one("h1")
+        if title_el:
+            title = title_el.get_text(strip=True)
+
     
-        title=soup.title.get_text().split("|")[0].strip()
+        #title=soup.title.get_text().split("|")[0].strip()
     
         # ⭐ 人数取得
         servings = 1
@@ -2278,7 +2287,6 @@ def show_recipe_search():
         key=url_input_key
     )
 
-    import re
 
     def extract_delish_url(text):
         if not text:
