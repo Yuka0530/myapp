@@ -16,7 +16,17 @@ from google.oauth2.service_account import Credentials
 import plotly.graph_objects as go
 import uuid
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# Windowsローカルだけ固定パスを使う
+if platform.system() == "Windows":
+    win_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    if os.path.exists(win_path):
+        pytesseract.pytesseract.tesseract_cmd = win_path
+else:
+    # Linux(Streamlit Cloud) は PATH 上の tesseract を使う
+    tesseract_path = shutil.which("tesseract")
+    if tesseract_path:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 st.set_page_config(
     page_title="栄養計算アプリ",
@@ -2273,7 +2283,7 @@ def show_recipe_search():
 
 
     if titles:
-        st.header("②レシピURL取得")
+        #st.header("②レシピURL取得")
 
         # 毎回このページを開いた時にOCR由来の候補を作り直す
         st.session_state.recipes_current_page = []
@@ -2281,8 +2291,8 @@ def show_recipe_search():
         for t in titles:
             url = search_recipe(t)
 
-            st.write(f"抽出タイトル: {t}")
-            st.write(url)
+            #st.write(f"抽出タイトル: {t}")
+            #st.write(url)
 
             if url:
                 # 同じURLがすでに入っていないか確認
@@ -2358,30 +2368,6 @@ def show_recipe_search():
                     st.session_state.manual_recipe_urls.pop(idx)
                     st.rerun()
 
-    if titles:
-        st.header("②レシピURL取得")
-
-        # 毎回このページを開いた時にOCR由来の候補を作り直す
-        st.session_state.recipes_current_page = []
-
-        for t in titles:
-            url = search_recipe(t)
-
-            st.write(f"抽出タイトル: {t}")
-            st.write(url)
-
-            if url:
-                # 同じURLがすでに入っていないか確認
-                already_exists = any(
-                    r["url"] == url for r in st.session_state.recipes_current_page
-                )
-
-                if not already_exists:
-                    st.session_state.recipes_current_page.append({
-                        "title": t,         # OCRで取れたタイトル
-                        "url": url,
-                        "source": "ocr"
-                    })
 
     display_recipes = list(st.session_state.recipes_current_page)
 
@@ -3452,7 +3438,7 @@ def show_recipe_edit():
             st.success("保存しました")
 
             st.session_state.recipe_edit_detail = None
-            st.session_state.page = "show_recipe_search"
+            st.session_state.page = "recipe_search"
             st.rerun()
 
 # =========================
