@@ -888,6 +888,12 @@ if "edit_meal_id" not in st.session_state:
 if "my_item_edit_name" not in st.session_state:
     st.session_state.my_item_edit_name = None
 
+if "recipe_edit_index" not in st.session_state:
+    st.session_state.recipe_edit_index = None
+
+if "recipe_edit_detail" not in st.session_state:
+    st.session_state.recipe_edit_detail = None    
+
 def format_meal_header_date(date_value):
     if date_value is None:
         return ""
@@ -925,6 +931,8 @@ def clear_meal_add_temp_states(clear_recipe_page=False, clear_my_item_edit=False
             "recipe_ingredients_state",
             "recipe_delete_target",
             "recipes_current_page",
+            "recipe_edit_index",
+            "recipe_edit_detail",
         ]:
             if k in st.session_state:
                 del st.session_state[k]
@@ -1994,6 +2002,12 @@ def show_recipe_search():
 
     if "recipe_delete_target" not in st.session_state:
         st.session_state.recipe_delete_target = None
+
+    if "recipes_current_page" not in st.session_state:
+        st.session_state.recipes_current_page = []
+
+    if "manual_recipe_urls" not in st.session_state:
+        st.session_state.manual_recipe_urls = []
     
     render_meal_fixed_header(
         back_page="meal_add",
@@ -2256,18 +2270,32 @@ def show_recipe_search():
     titles = [t.strip() for t in titles if str(t).strip()]
     titles = list(dict.fromkeys(titles))
     
-    ocr_urls = []
+
 
     if titles:
         st.header("②レシピURL取得")
 
+        # 毎回このページを開いた時にOCR由来の候補を作り直す
+        st.session_state.recipes_current_page = []
+
         for t in titles:
             url = search_recipe(t)
+
             st.write(f"抽出タイトル: {t}")
             st.write(url)
 
             if url:
-                ocr_urls.append(url)
+                # 同じURLがすでに入っていないか確認
+                already_exists = any(
+                    r["url"] == url for r in st.session_state.recipes_current_page
+                )
+
+                if not already_exists:
+                    st.session_state.recipes_current_page.append({
+                        "title": t,         # OCRで取れたタイトル
+                        "url": url,
+                        "source": "ocr"
+                    })
 
     # -------------------------
     # URL手動追加
@@ -2330,285 +2358,986 @@ def show_recipe_search():
                     st.session_state.manual_recipe_urls.pop(idx)
                     st.rerun()
 
-    urls = ocr_urls + st.session_state.manual_recipe_urls
-    urls = [u for u in urls if u]
-    urls = list(dict.fromkeys(urls))
-    
-    if urls:
-        st.header("③材料取得")
-    
-        total_kcal=0
-    
-        selected_foods = {}
-        if "selected_foods" not in st.session_state:
-            st.session_state.selected_foods = {}
-    
-        for url in urls:
+    if titles:
+        st.header("②レシピURL取得")
 
-            kcal = 0
-            protein = 0
-            fat = 0
-            carb = 0
-            calcium = 0
-            iron = 0
-            vita = 0
-            vite = 0
-            vitb1 = 0
-            vitb2 = 0
-            vitc = 0
-            fiber = 0
-            salt = 0
-    
-            if not url:
-                continue
+        # 毎回このページを開いた時にOCR由来の候補を作り直す
+        st.session_state.recipes_current_page = []
 
-            #レシピをすべて追加のための辞書作成
-            if "recipes_current_page" not in st.session_state:
-                st.session_state.recipes_current_page = {}
-    
-            st.markdown("---")
-    
-            title, ingredients, servings = get_recipe_data(url)
-            st.subheader(title)
-            st.caption(f"📖 レシピは {servings} 人分")
+        for t in titles:
+            url = search_recipe(t)
 
-            if url not in st.session_state.recipe_ingredients_state:
-                st.session_state.recipe_ingredients_state[url] = []
-                for ing in ingredients:
-                    st.session_state.recipe_ingredients_state[url].append({
-                        "uid": str(uuid.uuid4()),
-                        "name": ing["name"],
-                        "amount": ing["amount"],
-                        "is_manual": False
+            st.write(f"抽出タイトル: {t}")
+            st.write(url)
+
+            if url:
+                # 同じURLがすでに入っていないか確認
+                already_exists = any(
+                    r["url"] == url for r in st.session_state.recipes_current_page
+                )
+
+                if not already_exists:
+                    st.session_state.recipes_current_page.append({
+                        "title": t,         # OCRで取れたタイトル
+                        "url": url,
+                        "source": "ocr"
                     })
+
+    display_recipes = list(st.session_state.recipes_current_page)
+
+    for url in st.session_state.manual_recipe_urls:
+        already_exists = any(r["url"] == url for r in display_recipes)
+
+        if not already_exists:
+            display_recipes.append({
+                "title": url,      # 手動追加は最初URLを仮タイトルにする
+                "url": url,
+                "source": "manual"
+            })                
     
-            col1, col2 = st.columns(2)
-    
+    if display_recipes:
+        st.subheader("レシピ候補一覧")
+
+        for i, recipe in enumerate(display_recipes):
+            col1, col2, col3 = st.columns([6, 1.3, 1.3])
+
             with col1:
-                servings_selected = st.selectbox(
-                    "🍽 何人分作る？",
-                    [1,2,3,4,5,6,8,10],
-                    index=[1,2,3,4,5,6,8,10].index(servings) if servings in [1,2,3,4,5,6,8,10] else 1,
-                    key=f"servings_{url}"
-                )
-            
+                st.write(f"**{recipe['title']}**")
+                st.caption(recipe["url"])
+
             with col2:
-                multiplier = st.selectbox(
-                    "🔢 分量倍率",
-                    [0.5,0.75,1,1.25,1.5,2,3],
-                    index=2,   # 1倍
-                    key=f"multi_{url}"
-                )
+                st.markdown(f"[開く]({recipe['url']})")
+
+            with col3:
+                if st.button("編集", key=f"edit_recipe_{i}"):
+                    title, ingredients, servings = get_recipe_data(recipe["url"])
+
+                    st.session_state.recipe_edit_detail = {
+                        "url": recipe["url"],
+                        "title": title,
+                        "ingredients": ingredients,
+                        "servings": servings
+                    }
+                    st.session_state.page = "recipe_edit"
+                    st.rerun()
+
+    # if urls:
+    #     st.header("③材料取得")
+    
+    #     total_kcal=0
+    
+    #     selected_foods = {}
+    #     if "selected_foods" not in st.session_state:
+    #         st.session_state.selected_foods = {}
+    
+    #     for url in urls:
+
+    #         kcal = 0
+    #         protein = 0
+    #         fat = 0
+    #         carb = 0
+    #         calcium = 0
+    #         iron = 0
+    #         vita = 0
+    #         vite = 0
+    #         vitb1 = 0
+    #         vitb2 = 0
+    #         vitc = 0
+    #         fiber = 0
+    #         salt = 0
+    
+    #         if not url:
+    #             continue
+
+    #         #レシピをすべて追加のための辞書作成
+    #         if "recipes_current_page" not in st.session_state:
+    #             st.session_state.recipes_current_page = {}
+    
+    #         st.markdown("---")
+    
+    #         title, ingredients, servings = get_recipe_data(url)
+    #         st.subheader(title)
+    #         st.caption(f"📖 レシピは {servings} 人分")
+
+    #         if url not in st.session_state.recipe_ingredients_state:
+    #             st.session_state.recipe_ingredients_state[url] = []
+    #             for ing in ingredients:
+    #                 st.session_state.recipe_ingredients_state[url].append({
+    #                     "uid": str(uuid.uuid4()),
+    #                     "name": ing["name"],
+    #                     "amount": ing["amount"],
+    #                     "is_manual": False
+    #                 })
+    
+    #         col1, col2 = st.columns(2)
+    
+    #         with col1:
+    #             servings_selected = st.selectbox(
+    #                 "🍽 何人分作る？",
+    #                 [1,2,3,4,5,6,8,10],
+    #                 index=[1,2,3,4,5,6,8,10].index(servings) if servings in [1,2,3,4,5,6,8,10] else 1,
+    #                 key=f"servings_{url}"
+    #             )
+            
+    #         with col2:
+    #             multiplier = st.selectbox(
+    #                 "🔢 分量倍率",
+    #                 [0.5,0.75,1,1.25,1.5,2,3],
+    #                 index=2,   # 1倍
+    #                 key=f"multi_{url}"
+    #             )
     
           
-            IGNORE_INGREDIENTS = ["水", "氷", "お湯", "熱湯"]
+    #         IGNORE_INGREDIENTS = ["水", "氷", "お湯", "熱湯"]
 
-            if st.session_state.recipe_delete_target is not None:
-                target = st.session_state.recipe_delete_target
-                target_url = target["url"]
-                target_uid = target["uid"]
+    #         if st.session_state.recipe_delete_target is not None:
+    #             target = st.session_state.recipe_delete_target
+    #             target_url = target["url"]
+    #             target_uid = target["uid"]
 
-                if target_url in st.session_state.recipe_ingredients_state:
-                    st.session_state.recipe_ingredients_state[target_url] = [
-                        ing for ing in st.session_state.recipe_ingredients_state[target_url]
-                        if ing["uid"] != target_uid
-                    ]
+    #             if target_url in st.session_state.recipe_ingredients_state:
+    #                 st.session_state.recipe_ingredients_state[target_url] = [
+    #                     ing for ing in st.session_state.recipe_ingredients_state[target_url]
+    #                     if ing["uid"] != target_uid
+    #                 ]
 
-                st.session_state.recipe_delete_target = None
-                st.rerun()
+    #             st.session_state.recipe_delete_target = None
+    #             st.rerun()
     
-            editable_ingredients = st.session_state.recipe_ingredients_state[url]
+    #         editable_ingredients = st.session_state.recipe_ingredients_state[url]
 
-            for i, ing in enumerate(editable_ingredients):
-                st.divider()
+    #         for i, ing in enumerate(editable_ingredients):
+    #             st.divider()
 
-                col_title, col_delete = st.columns([5, 1])
+    #             col_title, col_delete = st.columns([5, 1])
 
-                with col_title:
-                    if ing["is_manual"]:
-                        st.write(f"### {ing['name']}（追加）")
-                    else:
-                        st.write(f"### {ing['name']}")
+    #             with col_title:
+    #                 if ing["is_manual"]:
+    #                     st.write(f"### {ing['name']}（追加）")
+    #                 else:
+    #                     st.write(f"### {ing['name']}")
 
-                with col_delete:
-                    st.write("")
-                    st.write("")
-                    if st.button("削除", key=f"delete_ing_{url}_{ing['uid']}"):
-                        st.session_state.recipe_delete_target = {
-                            "url": url,
-                            "uid": ing["uid"]
-                        }
-                        st.rerun()
+    #             with col_delete:
+    #                 st.write("")
+    #                 st.write("")
+    #                 if st.button("削除", key=f"delete_ing_{url}_{ing['uid']}"):
+    #                     st.session_state.recipe_delete_target = {
+    #                         "url": url,
+    #                         "uid": ing["uid"]
+    #                     }
+    #                     st.rerun()
 
-                # ⭐ 食材名で除外
-                if is_ignored_ingredient(ing["name"]):
-                    continue
+    #             # ⭐ 食材名で除外
+    #             if is_ignored_ingredient(ing["name"]):
+    #                 continue
             
-                # ⭐ 分量で除外
-                if is_ignored_amount(ing["amount"]):
-                    continue
+    #             # ⭐ 分量で除外
+    #             if is_ignored_amount(ing["amount"]):
+    #                 continue
 
-                selected = None
+    #             selected = None
 
 
-                # =========================
-                # 既存の取得材料
-                # =========================
-                if not ing["is_manual"]:
-                    candidates = get_candidates(ing["name"], mapping)
-                    candidates = get_sorted_candidates(
-                        ing["name"],
-                        candidates,
-                        mapping
+    #             # =========================
+    #             # 既存の取得材料
+    #             # =========================
+    #             if not ing["is_manual"]:
+    #                 candidates = get_candidates(ing["name"], mapping)
+    #                 candidates = get_sorted_candidates(
+    #                     ing["name"],
+    #                     candidates,
+    #                     mapping
+    #                 )
+
+    #                 if candidates:
+    #                     selected = st.selectbox(
+    #                         "候補",
+    #                         candidates,
+    #                         format_func=format_food_label,
+    #                         key=f"{url}_{ing['uid']}_candidate"
+    #                     )
+    #                 else:
+    #                     st.warning("候補が見つかりません")
+
+    #                 search_word = st.text_input(
+    #                     "🔎 食材名を検索（候補に無い場合）",
+    #                     key=f"{url}_{ing['uid']}_search"
+    #                 )
+
+    #                 if search_word:
+    #                     results = [
+    #                         food for food in nutrition_dict
+    #                         if normalize(search_word) in normalize(food)
+    #                     ]
+
+    #                     if results:
+    #                         selected = st.selectbox(
+    #                             "候補",
+    #                             results,
+    #                             format_func=format_food_label,
+    #                             key=f"{url}_{ing['uid']}_manual"
+    #                         )
+    #                     else:
+    #                         st.error("見つかりません")
+
+    #                 if selected:
+    #                     default_g = parse_amount(
+    #                         ing["amount"],
+    #                         food_name=selected,
+    #                         nutrition_dict=nutrition_dict
+    #                     )
+
+    #                     colA, colB = st.columns([3, 1])
+
+    #                     with colB:
+    #                         item_multiplier = st.selectbox(
+    #                             "倍率",
+    #                             [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3],
+    #                             index=3,
+    #                             key=f"{url}_{ing['uid']}_multi"
+    #                         )
+
+    #                     display_g = default_g * multiplier * item_multiplier
+
+    #                     with colA:
+    #                         amount = st.number_input(
+    #                             "グラム",
+    #                             value=int(display_g),
+    #                             step=1,
+    #                             key=f"{url}_{ing['uid']}_amt_{multiplier}_{item_multiplier}"
+    #                         )
+
+    #                     st.caption(f"📖 レシピ分量：{ing['amount']}")
+
+    #             # =========================
+    #             # 手動追加材料
+    #             # =========================
+    #             else:
+    #                 search_word = st.text_input(
+    #                     "追加する食材名を検索",
+    #                     value=ing["name"],
+    #                     key=f"{url}_{ing['uid']}_add_search"
+    #                 )
+
+    #                 results = []
+    #                 if search_word:
+    #                     results = [
+    #                         food for food in nutrition_dict
+    #                         if normalize(search_word) in normalize(food)
+    #                     ]
+
+    #                 if results:
+    #                     selected = st.selectbox(
+    #                         "候補",
+    #                         results,
+    #                         format_func=format_food_label,
+    #                         key=f"{url}_{ing['uid']}_add_candidate"
+    #                     )
+    #                 else:
+    #                     st.info("食材名を入力して候補を選んでください")
+
+    #                 amount = st.number_input(
+    #                     "グラム",
+    #                     min_value=0.0,
+    #                     step=1.0,
+    #                     value=100.0,
+    #                     key=f"{url}_{ing['uid']}_add_gram"
+    #                 )
+
+    #             if selected:
+    #                 st.session_state[f"{url}_{ing['uid']}_gram"] = amount
+
+    #                 if url not in st.session_state.selected_foods:
+    #                     st.session_state.selected_foods[url] = {}
+
+    #                 original_name = ing["name"] if ing["name"] else search_word
+
+    #                 st.session_state.selected_foods[url][ing["uid"]] = {
+    #                     "original_name": original_name,
+    #                     "selected_food": selected
+    #                 }
+
+    #                 nut = nutrition_dict[selected]
+
+    #                 kcal += safe_float(nut["エネルギー"]) * amount / 100
+    #                 protein += safe_float(nut["たんぱく質"]) * amount / 100
+    #                 fat += safe_float(nut["脂質"]) * amount / 100
+    #                 carb += safe_float(nut["炭水化物"]) * amount / 100
+    #                 calcium += safe_float(nut["カルシウム"]) * amount / 100
+    #                 iron += safe_float(nut["鉄"]) * amount / 100
+    #                 vita += safe_float(nut["ビタミンA"]) * amount / 100
+    #                 vite += safe_float(nut["ビタミンE"]) * amount / 100
+    #                 vitb1 += safe_float(nut["ビタミンB1"]) * amount / 100
+    #                 vitb2 += safe_float(nut["ビタミンB2"]) * amount / 100
+    #                 vitc += safe_float(nut["ビタミンC"]) * amount / 100
+    #                 fiber += safe_float(nut["食物繊維"]) * amount / 100
+    #                 salt += safe_float(nut["食塩相当量"]) * amount / 100
+
+    #                 st.write(f"👉 {safe_float(nut['エネルギー']) * amount / 100:.1f} kcal")
+    
+    #         st.divider()
+    #         st.subheader(f"合計カロリー: {kcal:.1f} kcal")
+    #         per_person = kcal / servings_selected
+
+    #         per_person_kcal = kcal / servings_selected
+    #         per_person_protein = protein / servings_selected
+    #         per_person_fat = fat / servings_selected
+    #         per_person_carb = carb / servings_selected
+    #         per_person_calcium = calcium / servings_selected
+    #         per_person_iron = iron / servings_selected
+    #         per_person_vita = vita / servings_selected
+    #         per_person_vite = vite / servings_selected
+    #         per_person_vitb1 = vitb1 / servings_selected
+    #         per_person_vitb2 = vitb2 / servings_selected
+    #         per_person_vitc = vitc / servings_selected
+    #         per_person_fiber = fiber / servings_selected
+    #         per_person_salt = salt / servings_selected
+
+    #         #この画面のレシピすべて追加用にappend
+    #         st.session_state.recipes_current_page[url] = {
+    #             "title": title,
+    #             "servings": servings_selected,
+    #             "kcal": per_person_kcal,
+    #             "protein": per_person_protein,
+    #             "fat": per_person_fat,
+    #             "carb": per_person_carb,
+    #             "calcium": per_person_calcium,
+    #             "iron": per_person_iron,
+    #             "vitA": per_person_vita,
+    #             "vitE": per_person_vite,
+    #             "vitB1": per_person_vitb1,
+    #             "vitB2": per_person_vitb2,
+    #             "vitC": per_person_vitc,
+    #             "fiber": per_person_fiber,
+    #             "salt": per_person_salt
+    #         }
+    
+    #         st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
+    
+    #         if st.button("＋ 材料を追加", key=f"add_manual_ing_{url}"):
+    #             st.session_state.recipe_ingredients_state[url].append({
+    #                 "uid": str(uuid.uuid4()),
+    #                 "name": "",
+    #                 "amount": "",
+    #                 "is_manual": True
+    #             })
+    #             st.rerun()    
+    
+    #         if st.button("📌 レシピとして追加", key=f"save_{url}"):
+
+    #             meal = st.session_state.meal_type
+    #             date = st.session_state.selected_date
+            
+    #             ingredients_for_save = []
+            
+    #             for uid, item in st.session_state.selected_foods.get(url, {}).items():
+    #                 gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+
+    #                 ingredients_for_save.append({
+    #                     "food": item["selected_food"],
+    #                     "gram": gram
+    #                 })
+            
+    #             total_nut = calc_nutrition(
+    #                 ingredients_for_save,
+    #                 nutrition_dict
+    #             )
+
+    #             per_person_nut = divide_nutrition(total_nut, servings_selected)
+
+    #             meal_id = save_meal_log_full(
+    #                 date,
+    #                 meal,
+    #                 title,
+    #                 servings=servings_selected,
+    #                 nut=per_person_nut
+    #             )
+
+    #             save_ingredients(
+    #                 meal_id,
+    #                 ingredients_for_save
+    #             )
+            
+    #             load_meal_log.clear()
+            
+    #             st.success("保存しました")
+
+                
+
+    #             def save_all_to_gsheet(selected_items_list):
+    #                 """
+    #                 selected_items_list: [(original, selected), (original, selected), ...] 
+    #                 という形式のリストを受け取って一括保存する
+    #                 """
+    #                 client = connect_gsheet()
+    #                 sheet = client.open("food_mapping").sheet1
+                    
+    #                 # 現在のデータを1回だけ取得
+    #                 all_data = sheet.get_all_values()
+                    
+    #                 # 新しく追加する行を溜めるリスト
+    #                 rows_to_append = []
+                    
+    #                 for original, selected in selected_items_list:
+                        
+    #                     found = False
+    #                     # 既存データにあるか確認（ここをループ内で回すと重いですが、API通信よりはマシです）
+    #                     for i, row in enumerate(all_data[1:], start=2):
+    #                         #st.write(i,row)
+    #                         if row[0] == original and row[1] == selected:
+    #                             # 既存のカウントアップは、本当は batch_update が理想ですが
+    #                             # まずは簡易的にここだけ通信
+    #                             count = int(row[2]) if len(row) > 2 and row[2] else 0
+    #                             sheet.update_cell(i, 3, count + 1)
+    #                             found = True
+    #                             break
+                        
+    #                     if not found:
+    #                         rows_to_append.append([original, selected, 1])
+                    
+    #                 # 溜まった新規行を「1回の通信」でドバッと追加
+    #                 if rows_to_append:
+    #                     sheet.append_rows(rows_to_append)
+
+    #             # 保存したいデータを一旦リストにまとめる
+    #             items_to_save = []
+    #             for uid, item in st.session_state.selected_foods.get(url, {}).items():
+    #                 items_to_save.append((
+    #                     item["original_name"],
+    #                     item["selected_food"]
+    #                 ))
+                
+    #             # まとめて一回だけ関数を呼ぶ！
+    #             save_all_to_gsheet(items_to_save)
+ 
+    #             #for original, selected in st.session_state.selected_foods.get(url, {}).items():
+    #                 #st.write(original,selected)
+    #                 #save_to_gsheet(original, selected)
+
+    #             st.session_state.recipe_page_init = False
+            
+    #             st.success("Google Sheetsに保存しました！✨")
+
+    #             #st.session_state.page = "dashboard"
+    #             #st.rerun()
+
+    #     # =========================
+    #     # 一括保存用関数
+    #     # =========================
+    #     def save_multiple_to_gsheet(items_to_save):
+    #         """
+    #         items_to_save: [(original, selected), ...] のリスト
+    #         """
+    #         if not items_to_save:
+    #             return
+        
+    #         client = connect_gsheet()
+    #         sheet = client.open("food_mapping").sheet1
+            
+    #         # 全データを1回だけ取得（通信節約）
+    #         all_data = sheet.get_all_values()
+    #         new_rows = []
+        
+    #         # プログレスバーを出すとユーザーが安心します
+    #         progress_text = "Google Sheetsに保存中..."
+    #         my_bar = st.progress(0, text=progress_text)
+        
+    #         for idx, (original, selected) in enumerate(items_to_save):
+    #             st.write(idx,original,selected)
+    #             found = False
+    #             # 既存データにあるかチェック
+    #             for i, row in enumerate(all_data, start=1):
+    #                 if len(row) >= 2 and row[0] == original and row[1] == selected:
+    #                     count = int(row[2]) if len(row) > 2 and row[2] else 0
+    #                     sheet.update_cell(i, 3, count + 1) # ここは1回通信が発生
+    #                     found = True
+    #                     break
+                
+    #             if not found:
+    #                 new_rows.append([original, selected, 1])
+                
+    #             # 進捗更新
+    #             my_bar.progress((idx + 1) / len(items_to_save), text=progress_text)
+        
+    #         # 新規データを一括で末尾に追加（ここが劇的に速い！）
+    #         if new_rows:
+    #             sheet.append_rows(new_rows)
+            
+    #         my_bar.empty()
+
+    #     # =========================
+    #     # ボタン側の処理
+    #     # =========================
+    #     if st.button("📌 この画面のレシピをすべて追加"):
+        
+    #         meal = st.session_state.meal_type
+    #         date = st.session_state.selected_date
+        
+    #         recipes = st.session_state.get("recipes_current_page", {})
+        
+    #         for url, r in recipes.items():
+        
+    #             ingredients_for_save = []
+        
+    #             for uid, item in st.session_state.selected_foods.get(url, {}).items():
+    #                 gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+
+    #                 ingredients_for_save.append({
+    #                     "food": item["selected_food"],
+    #                     "gram": gram
+    #                 })
+        
+    #             total_nut = calc_nutrition(
+    #                 ingredients_for_save,
+    #                 nutrition_dict
+    #             )
+
+    #             per_person_nut = divide_nutrition(total_nut, r["servings"])
+
+    #             meal_id = save_meal_log_full(
+    #                 date,
+    #                 meal,
+    #                 r["title"],
+    #                 servings=r["servings"],
+    #                 nut=per_person_nut
+    #             )
+
+    #             save_ingredients(
+    #                 meal_id,
+    #                 ingredients_for_save
+    #             )
+        
+    #         load_meal_log.clear()
+        
+    #         st.session_state.recipes_current_page = {}
+        
+    #         st.success(f"{meal}に{len(recipes)}レシピ追加しました")
+
+            
+    #         # 1. 保存したいデータをすべて一つのリストに集める
+    #         all_items = []
+    #         for url_key in st.session_state.selected_foods:
+    #             for uid, item in st.session_state.selected_foods[url_key].items():
+    #                 all_items.append((
+    #                     item["original_name"],
+    #                     item["selected_food"]
+    #                 ))
+            
+    #         # 2. まとめて保存関数を1回だけ呼ぶ
+    #         if all_items:
+    #             save_multiple_to_gsheet(all_items)
+    #             st.success(f"全 {len(all_items)} 件の食材データを保存しました！")
+    #         else:
+    #             st.warning("保存するデータがありません")
+
+    if st.button("←topに戻る"):
+        st.session_state.recipes_current_page = {}
+        st.session_state.manual_recipe_urls = []
+        st.session_state.manual_recipe_url_input = ""
+        st.session_state.page = "dashboard"
+        st.rerun()
+
+
+def show_recipe_edit():
+    render_meal_fixed_header(
+        back_page="recipe_search",
+        clear_on_back=False,
+        sublabel="材料を編集して食事に追加"
+    )
+
+    detail = st.session_state.get("recipe_edit_detail")
+
+    if not detail:
+        st.warning("編集中のレシピがありません")
+        if st.button("レシピ一覧へ戻る", key="back_recipe_search_empty"):
+            st.session_state.page = "recipe_search"
+            st.rerun()
+        return
+
+    # =========================
+    # show_recipe_search 内にあったローカル関数をここでも使えるように再定義
+    # =========================
+    nutrition_dict = load_nutrition()
+    mapping = load_mapping()
+
+    def get_candidates(word, mapping):
+        word_n = normalize(word)
+
+        candidates = [
+            food for food in nutrition_dict
+            if word_n in normalize(food)
+        ]
+
+        if word in mapping:
+            for saved_food in mapping[word].keys():
+                if saved_food not in candidates:
+                    candidates.append(saved_food)
+
+        return candidates
+
+    IGNORE_INGREDIENTS = [
+        "水",
+        "お湯",
+        "熱湯",
+        "氷",
+        "湯",
+    ]
+
+    IGNORE_WORDS = [
+        "適量",
+        "少々",
+        "適宜",
+    ]
+
+    def is_ignored_ingredient(name):
+        name_n = normalize(name)
+        return any(word in name_n for word in IGNORE_INGREDIENTS)
+
+    def is_ignored_amount(amount):
+        if amount is None:
+            return False
+        amount = str(amount)
+        return any(word in amount for word in IGNORE_WORDS)
+
+    def save_all_to_gsheet(selected_items_list):
+        """
+        selected_items_list: [(original, selected), ...]
+        """
+        if not selected_items_list:
+            return
+
+        client = connect_gsheet()
+        sheet = client.open("food_mapping").sheet1
+        all_data = sheet.get_all_values()
+        rows_to_append = []
+
+        for original, selected in selected_items_list:
+            found = False
+
+            for i, row in enumerate(all_data[1:], start=2):
+                if row[0] == original and row[1] == selected:
+                    count = int(row[2]) if len(row) > 2 and row[2] else 0
+                    sheet.update_cell(i, 3, count + 1)
+                    found = True
+                    break
+
+            if not found:
+                rows_to_append.append([original, selected, 1])
+
+        if rows_to_append:
+            sheet.append_rows(rows_to_append)
+
+        load_mapping.clear()
+
+    # =========================
+    # 詳細取得
+    # =========================
+    url = detail.get("url", "")
+    title = detail.get("title", "")
+    ingredients = detail.get("ingredients", [])
+    servings = detail.get("servings", 1)
+
+    st.subheader(title)
+    if url:
+        st.caption(url)
+
+    # =========================
+    # recipe_ingredients_state 初期化
+    # show_recipe_search の③と同じ考え方
+    # =========================
+    if "recipe_ingredients_state" not in st.session_state:
+        st.session_state.recipe_ingredients_state = {}
+
+    if "selected_foods" not in st.session_state:
+        st.session_state.selected_foods = {}
+
+    if "recipe_delete_target" not in st.session_state:
+        st.session_state.recipe_delete_target = None
+
+    if url not in st.session_state.recipe_ingredients_state:
+        st.session_state.recipe_ingredients_state[url] = []
+        for ing in ingredients:
+            st.session_state.recipe_ingredients_state[url].append({
+                "uid": str(uuid.uuid4()),
+                "name": ing["name"],
+                "amount": ing["amount"],
+                "is_manual": False
+            })
+
+    # =========================
+    # 人数・倍率
+    # =========================
+    col1, col2 = st.columns(2)
+
+    serving_options = [1, 2, 3, 4, 5, 6, 8, 10]
+    safe_servings = int(servings) if servings in serving_options else 1
+
+    with col1:
+        servings_selected = st.selectbox(
+            "🍽 何人分作る？",
+            serving_options,
+            index=serving_options.index(safe_servings),
+            key=f"edit_servings_{url}"
+        )
+
+    with col2:
+        multiplier = st.selectbox(
+            "🔢 分量倍率",
+            [0.5, 0.75, 1, 1.25, 1.5, 2, 3],
+            index=2,
+            key=f"edit_multi_{url}"
+        )
+
+    # =========================
+    # 削除予約があれば先に処理
+    # =========================
+    if st.session_state.recipe_delete_target is not None:
+        target = st.session_state.recipe_delete_target
+        target_url = target["url"]
+        target_uid = target["uid"]
+
+        if target_url in st.session_state.recipe_ingredients_state:
+            st.session_state.recipe_ingredients_state[target_url] = [
+                ing for ing in st.session_state.recipe_ingredients_state[target_url]
+                if ing["uid"] != target_uid
+            ]
+
+        if target_url in st.session_state.selected_foods:
+            if target_uid in st.session_state.selected_foods[target_url]:
+                del st.session_state.selected_foods[target_url][target_uid]
+
+        st.session_state.recipe_delete_target = None
+        st.rerun()
+
+    editable_ingredients = st.session_state.recipe_ingredients_state[url]
+
+    kcal = 0
+    protein = 0
+    fat = 0
+    carb = 0
+    calcium = 0
+    iron = 0
+    vita = 0
+    vite = 0
+    vitb1 = 0
+    vitb2 = 0
+    vitc = 0
+    fiber = 0
+    salt = 0
+
+    # =========================
+    # 材料編集
+    # =========================
+    for i, ing in enumerate(editable_ingredients):
+        st.divider()
+
+        col_title, col_delete = st.columns([5, 1])
+
+        with col_title:
+            if ing["is_manual"]:
+                st.write(f"### {ing['name']}（追加）" if ing["name"] else "### 追加材料")
+            else:
+                st.write(f"### {ing['name']}")
+
+        with col_delete:
+            st.write("")
+            st.write("")
+            if st.button("削除", key=f"delete_edit_ing_{url}_{ing['uid']}"):
+                st.session_state.recipe_delete_target = {
+                    "url": url,
+                    "uid": ing["uid"]
+                }
+                st.rerun()
+
+        # -------------------------
+        # 無視対象なら表示しない
+        # -------------------------
+        if is_ignored_ingredient(ing["name"]):
+            st.caption("※ 水系の材料なので除外")
+            continue
+
+        if is_ignored_amount(ing["amount"]):
+            st.caption("※ 適量・少々・適宜のため除外")
+            continue
+
+        selected = None
+        amount = 0
+
+        # -------------------------
+        # 元からある材料
+        # -------------------------
+        if not ing["is_manual"]:
+            candidates = get_candidates(ing["name"], mapping)
+            candidates = get_sorted_candidates(
+                ing["name"],
+                candidates,
+                mapping
+            )
+
+            if candidates:
+                selected = st.selectbox(
+                    "候補",
+                    candidates,
+                    format_func=format_food_label,
+                    key=f"edit_{url}_{ing['uid']}_candidate"
+                )
+            else:
+                st.warning("候補が見つかりません")
+
+            search_word = st.text_input(
+                "🔎 食材名を検索（候補に無い場合）",
+                key=f"edit_{url}_{ing['uid']}_search"
+            )
+
+            if search_word:
+                results = [
+                    food for food in nutrition_dict
+                    if normalize(search_word) in normalize(food)
+                ]
+
+                if results:
+                    selected = st.selectbox(
+                        "候補",
+                        results,
+                        format_func=format_food_label,
+                        key=f"edit_{url}_{ing['uid']}_manual"
                     )
-
-                    if candidates:
-                        selected = st.selectbox(
-                            "候補",
-                            candidates,
-                            format_func=format_food_label,
-                            key=f"{url}_{ing['uid']}_candidate"
-                        )
-                    else:
-                        st.warning("候補が見つかりません")
-
-                    search_word = st.text_input(
-                        "🔎 食材名を検索（候補に無い場合）",
-                        key=f"{url}_{ing['uid']}_search"
-                    )
-
-                    if search_word:
-                        results = [
-                            food for food in nutrition_dict
-                            if normalize(search_word) in normalize(food)
-                        ]
-
-                        if results:
-                            selected = st.selectbox(
-                                "候補",
-                                results,
-                                format_func=format_food_label,
-                                key=f"{url}_{ing['uid']}_manual"
-                            )
-                        else:
-                            st.error("見つかりません")
-
-                    if selected:
-                        default_g = parse_amount(
-                            ing["amount"],
-                            food_name=selected,
-                            nutrition_dict=nutrition_dict
-                        )
-
-                        colA, colB = st.columns([3, 1])
-
-                        with colB:
-                            item_multiplier = st.selectbox(
-                                "倍率",
-                                [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3],
-                                index=3,
-                                key=f"{url}_{ing['uid']}_multi"
-                            )
-
-                        display_g = default_g * multiplier * item_multiplier
-
-                        with colA:
-                            amount = st.number_input(
-                                "グラム",
-                                value=int(display_g),
-                                step=1,
-                                key=f"{url}_{ing['uid']}_amt_{multiplier}_{item_multiplier}"
-                            )
-
-                        st.caption(f"📖 レシピ分量：{ing['amount']}")
-
-                # =========================
-                # 手動追加材料
-                # =========================
                 else:
-                    search_word = st.text_input(
-                        "追加する食材名を検索",
-                        value=ing["name"],
-                        key=f"{url}_{ing['uid']}_add_search"
+                    st.error("見つかりません")
+
+            if selected:
+                default_g = parse_amount(
+                    ing["amount"],
+                    food_name=selected,
+                    nutrition_dict=nutrition_dict
+                )
+
+                colA, colB = st.columns([3, 1])
+
+                with colB:
+                    item_multiplier = st.selectbox(
+                        "倍率",
+                        [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3],
+                        index=3,
+                        key=f"edit_{url}_{ing['uid']}_multi"
                     )
 
-                    results = []
-                    if search_word:
-                        results = [
-                            food for food in nutrition_dict
-                            if normalize(search_word) in normalize(food)
-                        ]
+                display_g = default_g * multiplier * item_multiplier
 
-                    if results:
-                        selected = st.selectbox(
-                            "候補",
-                            results,
-                            format_func=format_food_label,
-                            key=f"{url}_{ing['uid']}_add_candidate"
-                        )
-                    else:
-                        st.info("食材名を入力して候補を選んでください")
-
+                with colA:
                     amount = st.number_input(
                         "グラム",
-                        min_value=0.0,
+                        value=float(display_g),
                         step=1.0,
-                        value=100.0,
-                        key=f"{url}_{ing['uid']}_add_gram"
+                        key=f"edit_{url}_{ing['uid']}_amt"
                     )
 
-                if selected:
-                    st.session_state[f"{url}_{ing['uid']}_gram"] = amount
+                st.caption(f"📖 レシピ分量：{ing['amount']}")
 
-                    if url not in st.session_state.selected_foods:
-                        st.session_state.selected_foods[url] = {}
+        # -------------------------
+        # 手動追加材料
+        # -------------------------
+        else:
+            search_word = st.text_input(
+                "追加する食材名を検索",
+                value=ing["name"],
+                key=f"edit_{url}_{ing['uid']}_add_search"
+            )
 
-                    original_name = ing["name"] if ing["name"] else search_word
+            results = []
+            if search_word:
+                results = [
+                    food for food in nutrition_dict
+                    if normalize(search_word) in normalize(food)
+                ]
 
-                    st.session_state.selected_foods[url][ing["uid"]] = {
-                        "original_name": original_name,
-                        "selected_food": selected
-                    }
+            if results:
+                selected = st.selectbox(
+                    "候補",
+                    results,
+                    format_func=format_food_label,
+                    key=f"edit_{url}_{ing['uid']}_add_candidate"
+                )
+            else:
+                st.info("食材名を入力して候補を選んでください")
 
-                    nut = nutrition_dict[selected]
+            amount = st.number_input(
+                "グラム",
+                min_value=0.0,
+                step=1.0,
+                value=100.0,
+                key=f"edit_{url}_{ing['uid']}_add_gram"
+            )
 
-                    kcal += safe_float(nut["エネルギー"]) * amount / 100
-                    protein += safe_float(nut["たんぱく質"]) * amount / 100
-                    fat += safe_float(nut["脂質"]) * amount / 100
-                    carb += safe_float(nut["炭水化物"]) * amount / 100
-                    calcium += safe_float(nut["カルシウム"]) * amount / 100
-                    iron += safe_float(nut["鉄"]) * amount / 100
-                    vita += safe_float(nut["ビタミンA"]) * amount / 100
-                    vite += safe_float(nut["ビタミンE"]) * amount / 100
-                    vitb1 += safe_float(nut["ビタミンB1"]) * amount / 100
-                    vitb2 += safe_float(nut["ビタミンB2"]) * amount / 100
-                    vitc += safe_float(nut["ビタミンC"]) * amount / 100
-                    fiber += safe_float(nut["食物繊維"]) * amount / 100
-                    salt += safe_float(nut["食塩相当量"]) * amount / 100
+        # -------------------------
+        # 選択された材料を保持・計算
+        # -------------------------
+        if selected:
+            st.session_state[f"{url}_{ing['uid']}_gram"] = amount
 
-                    st.write(f"👉 {safe_float(nut['エネルギー']) * amount / 100:.1f} kcal")
-    
-            st.divider()
-            st.subheader(f"合計カロリー: {kcal:.1f} kcal")
-            per_person = kcal / servings_selected
+            if url not in st.session_state.selected_foods:
+                st.session_state.selected_foods[url] = {}
 
-            per_person_kcal = kcal / servings_selected
-            per_person_protein = protein / servings_selected
-            per_person_fat = fat / servings_selected
-            per_person_carb = carb / servings_selected
-            per_person_calcium = calcium / servings_selected
-            per_person_iron = iron / servings_selected
-            per_person_vita = vita / servings_selected
-            per_person_vite = vite / servings_selected
-            per_person_vitb1 = vitb1 / servings_selected
-            per_person_vitb2 = vitb2 / servings_selected
-            per_person_vitc = vitc / servings_selected
-            per_person_fiber = fiber / servings_selected
-            per_person_salt = salt / servings_selected
+            original_name = ing["name"] if ing["name"] else search_word
 
-            #この画面のレシピすべて追加用にappend
-            st.session_state.recipes_current_page[url] = {
+            st.session_state.selected_foods[url][ing["uid"]] = {
+                "original_name": original_name,
+                "selected_food": selected
+            }
+
+            nut = nutrition_dict[selected]
+
+            kcal += safe_float(nut["エネルギー"]) * amount / 100
+            protein += safe_float(nut["たんぱく質"]) * amount / 100
+            fat += safe_float(nut["脂質"]) * amount / 100
+            carb += safe_float(nut["炭水化物"]) * amount / 100
+            calcium += safe_float(nut["カルシウム"]) * amount / 100
+            iron += safe_float(nut["鉄"]) * amount / 100
+            vita += safe_float(nut["ビタミンA"]) * amount / 100
+            vite += safe_float(nut["ビタミンE"]) * amount / 100
+            vitb1 += safe_float(nut["ビタミンB1"]) * amount / 100
+            vitb2 += safe_float(nut["ビタミンB2"]) * amount / 100
+            vitc += safe_float(nut["ビタミンC"]) * amount / 100
+            fiber += safe_float(nut["食物繊維"]) * amount / 100
+            salt += safe_float(nut["食塩相当量"]) * amount / 100
+
+            st.write(f"👉 {safe_float(nut['エネルギー']) * amount / 100:.1f} kcal")
+
+    # =========================
+    # 合計表示
+    # =========================
+    st.divider()
+    st.subheader(f"合計カロリー: {kcal:.1f} kcal")
+
+    per_person_kcal = kcal / servings_selected if servings_selected else 0
+    per_person_protein = protein / servings_selected if servings_selected else 0
+    per_person_fat = fat / servings_selected if servings_selected else 0
+    per_person_carb = carb / servings_selected if servings_selected else 0
+    per_person_calcium = calcium / servings_selected if servings_selected else 0
+    per_person_iron = iron / servings_selected if servings_selected else 0
+    per_person_vita = vita / servings_selected if servings_selected else 0
+    per_person_vite = vite / servings_selected if servings_selected else 0
+    per_person_vitb1 = vitb1 / servings_selected if servings_selected else 0
+    per_person_vitb2 = vitb2 / servings_selected if servings_selected else 0
+    per_person_vitc = vitc / servings_selected if servings_selected else 0
+    per_person_fiber = fiber / servings_selected if servings_selected else 0
+    per_person_salt = salt / servings_selected if servings_selected else 0
+
+    st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
+
+    # recipe_search 側で使っていた current_page 情報も更新
+    if "recipes_current_page" not in st.session_state:
+        st.session_state.recipes_current_page = {}
+
+    updated = False
+
+    for i, recipe in enumerate(st.session_state.recipes_current_page):
+        if recipe.get("url") == url:
+            st.session_state.recipes_current_page[i] = {
+                **recipe,
                 "title": title,
+                "url": url,
+                "source": recipe.get("source", "ocr"),
                 "servings": servings_selected,
                 "kcal": per_person_kcal,
                 "protein": per_person_protein,
@@ -2624,230 +3353,106 @@ def show_recipe_search():
                 "fiber": per_person_fiber,
                 "salt": per_person_salt
             }
-    
-            st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
-    
-            if st.button("＋ 材料を追加", key=f"add_manual_ing_{url}"):
-                st.session_state.recipe_ingredients_state[url].append({
-                    "uid": str(uuid.uuid4()),
-                    "name": "",
-                    "amount": "",
-                    "is_manual": True
-                })
-                st.rerun()    
-    
-            if st.button("📌 レシピとして追加", key=f"save_{url}"):
+            updated = True
+            break
 
-                meal = st.session_state.meal_type
-                date = st.session_state.selected_date
-            
-                ingredients_for_save = []
-            
-                for uid, item in st.session_state.selected_foods.get(url, {}).items():
-                    gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+    if not updated:
+        st.session_state.recipes_current_page.append({
+            "title": title,
+            "url": url,
+            "source": "ocr",
+            "servings": servings_selected,
+            "kcal": per_person_kcal,
+            "protein": per_person_protein,
+            "fat": per_person_fat,
+            "carb": per_person_carb,
+            "calcium": per_person_calcium,
+            "iron": per_person_iron,
+            "vitA": per_person_vita,
+            "vitE": per_person_vite,
+            "vitB1": per_person_vitb1,
+            "vitB2": per_person_vitb2,
+            "vitC": per_person_vitc,
+            "fiber": per_person_fiber,
+            "salt": per_person_salt
+        })
 
+    # =========================
+    # 手動材料追加
+    # =========================
+    if st.button("＋ 材料を追加", key=f"edit_add_manual_ing_{url}"):
+        st.session_state.recipe_ingredients_state[url].append({
+            "uid": str(uuid.uuid4()),
+            "name": "",
+            "amount": "",
+            "is_manual": True
+        })
+        st.rerun()
+
+    # =========================
+    # 下部ボタン
+    # =========================
+    col_save1, col_save2 = st.columns(2)
+
+    with col_save1:
+        if st.button("← レシピ一覧へ戻る", use_container_width=True, key=f"edit_back_{url}"):
+            st.session_state.page = "recipe_search"
+            st.rerun()
+
+    with col_save2:
+        if st.button("📌 レシピとして追加", use_container_width=True, key=f"edit_save_{url}"):
+            meal = st.session_state.meal_type
+            date = st.session_state.selected_date
+
+            ingredients_for_save = []
+
+            for uid, item in st.session_state.selected_foods.get(url, {}).items():
+                gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+
+                if safe_float(gram) > 0:
                     ingredients_for_save.append({
                         "food": item["selected_food"],
                         "gram": gram
                     })
-            
-                total_nut = calc_nutrition(
-                    ingredients_for_save,
-                    nutrition_dict
-                )
 
-                per_person_nut = divide_nutrition(total_nut, servings_selected)
+            total_nut = calc_nutrition(
+                ingredients_for_save,
+                nutrition_dict
+            )
 
-                meal_id = save_meal_log_full(
-                    date,
-                    meal,
-                    title,
-                    servings=servings_selected,
-                    nut=per_person_nut
-                )
+            per_person_nut = divide_nutrition(total_nut, servings_selected)
 
-                save_ingredients(
-                    meal_id,
-                    ingredients_for_save
-                )
-            
-                load_meal_log.clear()
-            
-                st.success("保存しました")
+            meal_id = save_meal_log_full(
+                date,
+                meal,
+                title,
+                servings=servings_selected,
+                nut=per_person_nut
+            )
 
-                
+            save_ingredients(
+                meal_id,
+                ingredients_for_save
+            )
 
-                def save_all_to_gsheet(selected_items_list):
-                    """
-                    selected_items_list: [(original, selected), (original, selected), ...] 
-                    という形式のリストを受け取って一括保存する
-                    """
-                    client = connect_gsheet()
-                    sheet = client.open("food_mapping").sheet1
-                    
-                    # 現在のデータを1回だけ取得
-                    all_data = sheet.get_all_values()
-                    
-                    # 新しく追加する行を溜めるリスト
-                    rows_to_append = []
-                    
-                    for original, selected in selected_items_list:
-                        
-                        found = False
-                        # 既存データにあるか確認（ここをループ内で回すと重いですが、API通信よりはマシです）
-                        for i, row in enumerate(all_data[1:], start=2):
-                            #st.write(i,row)
-                            if row[0] == original and row[1] == selected:
-                                # 既存のカウントアップは、本当は batch_update が理想ですが
-                                # まずは簡易的にここだけ通信
-                                count = int(row[2]) if len(row) > 2 and row[2] else 0
-                                sheet.update_cell(i, 3, count + 1)
-                                found = True
-                                break
-                        
-                        if not found:
-                            rows_to_append.append([original, selected, 1])
-                    
-                    # 溜まった新規行を「1回の通信」でドバッと追加
-                    if rows_to_append:
-                        sheet.append_rows(rows_to_append)
+            load_meal_log.clear()
+            load_meal_ingredients.clear()
 
-                # 保存したいデータを一旦リストにまとめる
-                items_to_save = []
-                for uid, item in st.session_state.selected_foods.get(url, {}).items():
+            items_to_save = []
+            for uid, item in st.session_state.selected_foods.get(url, {}).items():
+                gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+                if safe_float(gram) > 0:
                     items_to_save.append((
                         item["original_name"],
                         item["selected_food"]
                     ))
-                
-                # まとめて一回だけ関数を呼ぶ！
-                save_all_to_gsheet(items_to_save)
- 
-                #for original, selected in st.session_state.selected_foods.get(url, {}).items():
-                    #st.write(original,selected)
-                    #save_to_gsheet(original, selected)
 
-                st.session_state.recipe_page_init = False
-            
-                st.success("Google Sheetsに保存しました！✨")
+            save_all_to_gsheet(items_to_save)
 
-                #st.session_state.page = "dashboard"
-                #st.rerun()
+            st.success("保存しました")
 
-        # =========================
-        # 一括保存用関数
-        # =========================
-        def save_multiple_to_gsheet(items_to_save):
-            """
-            items_to_save: [(original, selected), ...] のリスト
-            """
-            if not items_to_save:
-                return
-        
-            client = connect_gsheet()
-            sheet = client.open("food_mapping").sheet1
-            
-            # 全データを1回だけ取得（通信節約）
-            all_data = sheet.get_all_values()
-            new_rows = []
-        
-            # プログレスバーを出すとユーザーが安心します
-            progress_text = "Google Sheetsに保存中..."
-            my_bar = st.progress(0, text=progress_text)
-        
-            for idx, (original, selected) in enumerate(items_to_save):
-                st.write(idx,original,selected)
-                found = False
-                # 既存データにあるかチェック
-                for i, row in enumerate(all_data, start=1):
-                    if len(row) >= 2 and row[0] == original and row[1] == selected:
-                        count = int(row[2]) if len(row) > 2 and row[2] else 0
-                        sheet.update_cell(i, 3, count + 1) # ここは1回通信が発生
-                        found = True
-                        break
-                
-                if not found:
-                    new_rows.append([original, selected, 1])
-                
-                # 進捗更新
-                my_bar.progress((idx + 1) / len(items_to_save), text=progress_text)
-        
-            # 新規データを一括で末尾に追加（ここが劇的に速い！）
-            if new_rows:
-                sheet.append_rows(new_rows)
-            
-            my_bar.empty()
-
-        # =========================
-        # ボタン側の処理
-        # =========================
-        if st.button("📌 この画面のレシピをすべて追加"):
-        
-            meal = st.session_state.meal_type
-            date = st.session_state.selected_date
-        
-            recipes = st.session_state.get("recipes_current_page", {})
-        
-            for url, r in recipes.items():
-        
-                ingredients_for_save = []
-        
-                for uid, item in st.session_state.selected_foods.get(url, {}).items():
-                    gram = st.session_state.get(f"{url}_{uid}_gram", 0)
-
-                    ingredients_for_save.append({
-                        "food": item["selected_food"],
-                        "gram": gram
-                    })
-        
-                total_nut = calc_nutrition(
-                    ingredients_for_save,
-                    nutrition_dict
-                )
-
-                per_person_nut = divide_nutrition(total_nut, r["servings"])
-
-                meal_id = save_meal_log_full(
-                    date,
-                    meal,
-                    r["title"],
-                    servings=r["servings"],
-                    nut=per_person_nut
-                )
-
-                save_ingredients(
-                    meal_id,
-                    ingredients_for_save
-                )
-        
-            load_meal_log.clear()
-        
-            st.session_state.recipes_current_page = {}
-        
-            st.success(f"{meal}に{len(recipes)}レシピ追加しました")
-
-            
-            # 1. 保存したいデータをすべて一つのリストに集める
-            all_items = []
-            for url_key in st.session_state.selected_foods:
-                for uid, item in st.session_state.selected_foods[url_key].items():
-                    all_items.append((
-                        item["original_name"],
-                        item["selected_food"]
-                    ))
-            
-            # 2. まとめて保存関数を1回だけ呼ぶ
-            if all_items:
-                save_multiple_to_gsheet(all_items)
-                st.success(f"全 {len(all_items)} 件の食材データを保存しました！")
-            else:
-                st.warning("保存するデータがありません")
-
-        if st.button("←topに戻る"):
-            st.session_state.recipes_current_page = {}
-            st.session_state.manual_recipe_urls = []
-            st.session_state.manual_recipe_url_input = ""
-            st.session_state.page = "dashboard"
+            st.session_state.recipe_edit_detail = None
+            st.session_state.page = "show_recipe_search"
             st.rerun()
 
 # =========================
@@ -3487,6 +4092,11 @@ elif st.session_state.page == "my_items":
 
 elif st.session_state.page == "my_item_form":
     show_my_item_form()
+
+elif st.session_state.page == "recipe_search":
+    show_recipe_search()
+elif st.session_state.page == "recipe_edit":
+    show_recipe_edit()
 
 
 
