@@ -2017,6 +2017,9 @@ def show_recipe_search():
     if "recipes_current_page" not in st.session_state:
         st.session_state.recipes_current_page = []
 
+    if "ocr_results_state" not in st.session_state:
+        st.session_state.ocr_results_state = []
+
     if "manual_recipe_urls" not in st.session_state:
         st.session_state.manual_recipe_urls = []
     
@@ -2251,63 +2254,155 @@ def show_recipe_search():
     if file:
         st.header("①タイトル抽出")
     
-    titles = []
-    
     # -------------------------
     # OCRエリア
     # -------------------------
+    ocr_results = []
+
     if file:
         pil_img = Image.open(file).convert("RGB")
-    
         st.image(pil_img, width=400)
-    
+
         img = np.array(pil_img)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    
+
         st.subheader("スクショからタイトル抽出")
-    
         title_imgs = crop_titles(img)
-    
+
         for i, t in enumerate(title_imgs):
-            text = read_title(t)
-    
-            if text.strip():
-                titles.append(text)
-    
+            raw_title = str(read_title(t)).strip()
+
             st.image(t, width=300)
-            st.write(text)
-    
-    # 重複削除
-    titles = [t.strip() for t in titles if str(t).strip()]
-    titles = list(dict.fromkeys(titles))
-    
+            st.write(f"OCR結果: {raw_title if raw_title else '（空）'}")
+
+            if raw_title:
+                found_url = search_recipe(raw_title)
+            else:
+                found_url = None
+
+            ocr_results.append({
+                "index": i,
+                "ocr_title": raw_title,
+                "edit_title": "",
+                "url": found_url
+            })
+    st.session_state.ocr_results_state = ocr_results
 
 
-    if titles:
-        #st.header("②レシピURL取得")
+    ocr_results = st.session_state.get("ocr_results_state", [])
 
-        # 毎回このページを開いた時にOCR由来の候補を作り直す
-        st.session_state.recipes_current_page = []
+    if ocr_results:
+        for item in ocr_results:
+            current_title = item.get("edited_title") or item.get("ocr_title") or ""
 
-        for t in titles:
-            url = search_recipe(t)
+            # すでにURLがある場合
+            if item.get("url"):
+                st.success(f"見つかりました: {current_title}")
+                st.markdown(item["url"])
 
-            #st.write(f"抽出タイトル: {t}")
-            #st.write(url)
-
-            if url:
-                # 同じURLがすでに入っていないか確認
                 already_exists = any(
-                    r["url"] == url for r in st.session_state.recipes_current_page
+                    r["url"] == item["url"]
+                    for r in st.session_state.recipes_current_page
                 )
-
                 if not already_exists:
                     st.session_state.recipes_current_page.append({
-                        "title": t,         # OCRで取れたタイトル
-                        "url": url,
+                        "title": current_title,
+                        "url": item["url"],
                         "source": "ocr"
                     })
 
+            # 見つからない場合は編集欄
+            else:
+                st.warning(f"見つかりませんでした: {current_title or '（空）'}")
+
+                edited = st.text_input(
+                    "タイトルを修正",
+                    value=current_title,
+                    key=f"edit_title_{item['index']}"
+                )
+
+                # 入力値を保持
+                item["edited_title"] = edited
+
+                if st.button("このタイトルで再検索", key=f"retry_{item['index']}"):
+                    found_url = search_recipe(edited.strip()) if edited.strip() else None
+
+                    if found_url:
+                        st.success("再検索で見つかりました")
+                        st.markdown(found_url)
+                        item["url"] = found_url
+                        item["edited_title"] = edited.strip()
+
+                        already_exists = any(
+                            r["url"] == found_url
+                            for r in st.session_state.recipes_current_page
+                        )
+                        if not already_exists:
+                            st.session_state.recipes_current_page.append({
+                                "title": edited.strip(),
+                                "url": found_url,
+                                "source": "edited"
+                            })
+
+                        #st.success("URLが見つかりました")
+                    else:
+                        st.warning("URLが見つかりませんでした")
+
+                    st.session_state.ocr_results_state = ocr_results
+                    #st.rerun()    
+    # if ocr_results:
+    #     #st.header("②レシピURL取得")
+
+    #     # 毎回このページを開いた時にOCR由来の候補を作り直す
+        
+
+    #     for item in ocr_results:
+    #         current_title = item.get("edited_title") or item.get("ocr_title") or ""
+    #         # すでに見つかったものはそのまま採用
+    #         if item["url"]:
+    #             st.success(f"見つかりました: {item['ocr_title']}")
+    #             st.markdown(item["url"])
+
+    #             already_exists = any(
+    #                 r["url"] == item["url"]
+    #                 for r in st.session_state.recipes_current_page
+    #             )
+    #             if not already_exists:
+    #                 st.session_state.recipes_current_page.append({
+    #                     "title": item["ocr_title"],
+    #                     "url": item["url"],
+    #                     "source": "ocr"
+    #                 })
+
+    #         # 見つからなかったものだけ編集欄を出す
+    #         else:
+    #             st.warning(f"見つかりませんでした: {item['ocr_title'] or '（空）'}")
+
+    #             edited = st.text_input(
+    #                 f"タイトル{i+1}を編集",
+    #                 value=item["ocr_title"],
+    #                 key=f"edit_failed_title_{item['index']}"
+    #             ).strip()
+
+    #             if st.button("このタイトルで再検索", key=f"retry_title_{item['index']}"):
+    #                 retry_url = search_recipe(edited) if edited else None
+
+    #                 if retry_url:
+    #                     st.success("再検索で見つかりました")
+    #                     st.markdown(retry_url)
+
+    #                     already_exists = any(
+    #                         r["url"] == retry_url
+    #                         for r in st.session_state.recipes_current_page
+    #                     )
+    #                     if not already_exists:
+    #                         st.session_state.recipes_current_page.append({
+    #                             "title": edited,
+    #                             "url": retry_url,
+    #                             "source": "ocr_edited"
+    #                         })
+    #                 else:
+    #                     st.error("再検索しても見つかりませんでした")
     # -------------------------
     # URL手動追加
     # -------------------------
@@ -2385,22 +2480,25 @@ def show_recipe_search():
     if display_recipes:
         st.subheader("レシピ候補一覧")
 
-        for i, recipe in enumerate(display_recipes):
+        for recipe in display_recipes:
+            recipe_url = recipe["url"]
+            recipe_title = recipe["title"]
+
             col1, col2, col3 = st.columns([6, 1.3, 1.3])
 
             with col1:
-                st.write(f"**{recipe['title']}**")
-                st.caption(recipe["url"])
+                st.write(f"**{recipe_title}**")
+                st.caption(recipe_url)
 
             with col2:
-                st.markdown(f"[開く]({recipe['url']})")
+                st.markdown(f"[開く]({recipe_url})")
 
             with col3:
-                if st.button("編集", key=f"edit_recipe_{i}"):
-                    title, ingredients, servings = get_recipe_data(recipe["url"])
+                if st.button("編集", key=f"edit_recipe_{recipe_url}"):
+                    title, ingredients, servings = get_recipe_data(recipe_url)
 
                     st.session_state.recipe_edit_detail = {
-                        "url": recipe["url"],
+                        "url": recipe_url,
                         "title": title,
                         "ingredients": ingredients,
                         "servings": servings
@@ -3216,7 +3314,7 @@ def show_recipe_edit():
                         "グラム",
                         value=float(display_g),
                         step=1.0,
-                        key=f"edit_{url}_{ing['uid']}_amt"
+                        key=f"edit_{url}_{ing['uid']}_amt_{multiplier}_{item_multiplier}"
                     )
 
                 st.caption(f"📖 レシピ分量：{ing['amount']}")
