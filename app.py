@@ -569,12 +569,24 @@ def load_meal_log():
 
     return df
 
+def get_next_meal_id():
+    logs = load_meal_log().copy()
+
+    if logs.empty or "id" not in logs.columns:
+        return 1
+
+    ids = pd.to_numeric(logs["id"], errors="coerce").dropna()
+
+    if ids.empty:
+        return 1
+
+    return int(ids.max()) + 1
+
 def save_meal_log_full(date, meal_type, recipe, servings, nut):
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
 
-    data = sheet.get_all_values()
-    new_id = len(data)
+    new_id = get_next_meal_id()
 
     sheet.append_row([
         new_id,
@@ -608,9 +620,7 @@ def save_meal_log_base(date, meal_type, recipe, servings=1):
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_log")
 
-    data = sheet.get_all_values()
-
-    new_id = len(data)
+    new_id = get_next_meal_id()
 
     sheet.append_row([
         new_id,
