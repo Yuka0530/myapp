@@ -2106,39 +2106,65 @@ def show_meal_add():
             #             "servings": servings,
             #             "mapping_items": mapping_items_to_save
             #         })
-    
+
+        def append_meal_log_with_id(meal_id, date, meal_type, recipe, servings, nut):
+            client = connect_gsheet()
+            sheet = client.open("food_mapping").worksheet("meal_log")
+
+            sheet.append_row([
+                meal_id,
+                str(date),
+                meal_type,
+                recipe,
+                servings,
+                nut["kcal"],
+                nut["protein"],
+                nut["fat"],
+                nut["carb"],
+                nut["calcium"],
+                nut["iron"],
+                nut["vitA"],
+                nut["vitE"],
+                nut["vitB1"],
+                nut["vitB2"],
+                nut["vitC"],
+                nut["fiber"],
+                nut["salt"]
+            ])
+
+            return meal_id
+
         if st.button("完了"):
             all_mapping_items = []
 
-            for item in save_queue:
+            base_meal_id = get_next_meal_id()   # ← 最初に1回だけ取る
+
+            for idx, item in enumerate(save_queue):
                 total_nut = calc_nutrition(item["ingredients"], nutrition_dict)
                 per_person_nut = divide_nutrition(total_nut, item["servings"])
 
-                meal_id = save_meal_log_full(
-                    st.session_state.selected_date,
-                    st.session_state.meal_type,
-                    item["title"],
+                meal_id = base_meal_id + idx    # ← ここで連番にする
+
+                append_meal_log_with_id(
+                    meal_id=meal_id,
+                    date=st.session_state.selected_date,
+                    meal_type=st.session_state.meal_type,
+                    recipe=item["title"],
                     servings=item["servings"],
                     nut=per_person_nut
                 )
 
                 save_ingredients(meal_id, item["ingredients"])
 
-                if item["type"] == "recipe":
-                    all_mapping_items.extend(item.get("mapping_items", []))
-
-            if all_mapping_items:
-                save_multiple_to_mapping(all_mapping_items)
-
-            st.success("登録しました")
-
-            st.session_state.search_step = 0
-            st.session_state.selected_foods_temp = []
-            st.session_state.search_results = {}
+                if item.get("mapping_items"):
+                    all_mapping_items.extend(item["mapping_items"])
 
             load_meal_log.clear()
             load_meal_ingredients.clear()
+            save_multiple_to_mapping(all_mapping_items)
 
+            clear_meal_add_temp_states(clear_recipe_page=True, clear_my_item_edit=True)
+            st.session_state.page = "dashboard"
             st.rerun()
 
     col_a, col_b = st.columns(2)
@@ -3565,7 +3591,7 @@ def show_recipe_edit():
                     amount = st.number_input(
                         "グラム",
                         value=int(display_g),
-                        step=10,
+                        step=5,
                         key=f"edit_{url}_{ing['uid']}_amt_{multiplier}_{item_multiplier}"
                     )
 
@@ -4041,9 +4067,9 @@ def show_saved_meal_edit():
         with col1:
             gram = st.number_input(
                 f"グラム {i+1}",
-                min_value=0.0,
-                step=1.0,
-                value=float(ing["gram"]),
+                min_value=0,
+                step=5,
+                value=int(ing["gram"]),
                 key=f"saved_edit_gram_{meal_id}_{uid}"
             )
 
