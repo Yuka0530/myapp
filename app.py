@@ -383,6 +383,10 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
     g_match = re.search(r'(\d+(?:\.\d+)?)\s*g', text)
     if g_match:
         return float(g_match.group(1))
+    
+    cc_match = re.search(r'(\d+(?:\.\d+)?)\s*cc', text)
+    if cc_match:
+        return float(cc_match.group(1))
 
     # ② 大さじ
     if "大さじ" in text:
@@ -933,6 +937,7 @@ def clear_meal_add_temp_states(clear_recipe_page=False, clear_my_item_edit=False
         "current_word",
         "history_filter_mode",
         "meal_add_recipe_selected_foods",
+        "state_key",
     ]:
         if k in st.session_state:
             del st.session_state[k]
@@ -994,6 +999,38 @@ def render_meal_fixed_header(back_page="dashboard", clear_on_back=False, sublabe
             )
 
     st.markdown('<div class="top-header-spacer"></div>', unsafe_allow_html=True)
+
+# =========================
+# 水や少々を除外する関数
+# ========================= 
+IGNORE_INGREDIENTS = [
+    "水",
+    "お湯",
+    "熱湯",
+    "氷",
+    "湯",
+]
+
+IGNORE_WORDS = [
+    "適量",
+    "少々",
+    "適宜",
+]
+
+def is_ignored_ingredient(name):
+    name_n = normalize(name)
+
+    return any(word in name_n for word in IGNORE_INGREDIENTS)
+
+def is_ignored_amount(amount):
+
+    if amount is None:
+        return False
+
+    amount = str(amount)
+
+    return any(word in amount for word in IGNORE_WORDS)
+
 
 # =========================
 # ダッシュボード
@@ -1681,8 +1718,8 @@ def show_meal_add():
 
                 amount = st.number_input(
                     f"分量(g) {i}",
-                    value=100.0,
-                    step=10.0,
+                    value=100,
+                    step=10,
                     key=f"amt_food_{i}"
                 )
 
@@ -1709,62 +1746,137 @@ def show_meal_add():
                 url = detail["url"]
                 servings = detail["servings"]
                 raw_ingredients = detail["ingredients"]
+                original_servings = detail["servings"]
 
                 st.write(f"**{title}**")
                 st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal")
                 st.markdown(f"[レシピを開く]({url})")
 
                 recipe_key = f"meal_add_recipe_{i}"
+                state_key = f"{recipe_key}_ingredients_state"
+                url_key = f"{recipe_key}_url"
+                servings_key = f"{recipe_key}_servings"
 
-                with st.expander("材料と分量を確認・編集", expanded=True):
-                    selected_ingredients = []
-                    mapping_items_to_save = []
+                # 初期化
+                if (
+                    state_key not in st.session_state
+                    or url_key not in st.session_state
+                    or st.session_state[url_key] != url
+                ):
+                    st.session_state[url_key] = url
+                    st.session_state[state_key] = []
 
-                    for j, ing in enumerate(raw_ingredients):
+                    for ing in raw_ingredients:
                         ing_name = ing["name"]
                         ing_amount = ing["amount"]
 
-                        st.markdown(f"### {ing_name}")
-                        st.caption(f"元の表記: {ing_amount}")
+                        # recipe_search と同じように無視対象は最初から入れない
+                        if is_ignored_ingredient(ing_name) or is_ignored_amount(ing_amount):
+                            st.caption("この材料は無視対象です")
+                            continue
 
-                        # =========================
-                        # 自動検索候補
-                        # =========================
+                        st.session_state[state_key].append({
+                            "uid": str(uuid.uuid4()),
+                            "name": ing_name,
+                            "amount": ing_amount,
+                            "is_manual": False
+                        })
+
+                if servings_key not in st.session_state:
+                    st.session_state[servings_key] = int(original_servings) if safe_float(original_servings) > 0 else 1
+
+                with st.expander("材料と分量を確認・編集", expanded=True):
+                    rows = st.session_state[state_key]
+
+                    # 追加ボタン
+                    if st.button("＋材料を追加", key=f"{recipe_key}_add_row"):
+                        rows.append({
+                            "uid": str(uuid.uuid4()),
+                            "name": "",
+                            "amount": "",
+                            "is_manual": True
+                        })
+                        st.rerun()
+
+                    selected_ingredients = []
+                    mapping_items_to_save = []
+                    delete_uid = None
+
+                    for row_idx, ing in enumerate(rows):
+                        uid = ing["uid"]
+                        ing_name = ing.get("name", "")
+                        ing_amount = ing.get("amount", "")
+
+                        st.divider()
+
+                        col_title, col_del = st.columns([6, 1])
+
+                        with col_title:
+                            edited_name = st.text_input(
+                                "材料名",
+                                value=ing_name,
+                                key=f"{recipe_key}_name_{uid}"
+                            )
+                            edited_amount = st.text_input(
+                                "元の表記",
+                                value=ing_amount,
+                                key=f"{recipe_key}_amount_{uid}"
+                            )
+
+                        with col_del:
+                            st.write("")
+                            st.write("")
+                            if st.button("🗑", key=f"{recipe_key}_delete_{uid}"):
+                                delete_uid = uid
+
+                        # 今回入力された値を state に戻す
+                        ing["name"] = edited_name
+                        ing["amount"] = edited_amount
+
+                        # 空行はまだ候補計算しない
+                        if not edited_name.strip():
+                            continue
+
+                        # 編集後に ignore 対象になったものも無視
+                        if is_ignored_ingredient(edited_name) or is_ignored_amount(edited_amount):
+                            st.caption("この材料は無視対象です")
+                            continue
+
+                        # 候補
                         candidates = [
                             food for food in food_master
-                            if normalize(ing_name) in normalize(food)
+                            if normalize(edited_name) in normalize(food)
                         ]
 
-                        # mapping履歴があるなら必ず追加
-                        if ing_name in mapping:
-                            for saved_food in mapping[ing_name].keys():
+                        if edited_name in mapping:
+                            for saved_food in mapping[edited_name].keys():
                                 if saved_food not in candidates:
                                     candidates.append(saved_food)
 
                         candidates = get_sorted_candidates(
-                            ing_name,
+                            edited_name,
                             candidates,
                             mapping
                         )
 
                         if not candidates:
-                            candidates = food_master[:30]
+                                st.warning("候補がありません")
+                                selected_food=None
+                                #continue
+                        #     candidates = food_master[:30]
                         else:
-                            candidates = candidates[:50]
+                        #     candidates = candidates[:50]
 
-                        selected_food = st.selectbox(
-                            "自動検索",
-                            candidates,
-                            format_func=format_food_label,
-                            key=f"{recipe_key}_food_{j}"
-                        )
+                            selected_food = st.selectbox(
+                                "自動検索候補",
+                                candidates,
+                                format_func=format_food_label,
+                                key=f"{recipe_key}_food_{uid}"
+                            )
 
-                        # =========================
-                        # 手動検索
-                        # =========================
                         manual_search = st.text_input(
                             "手動検索",
-                            key=f"{recipe_key}_search_{j}"
+                            key=f"{recipe_key}_search_{uid}"
                         )
 
                         if manual_search.strip():
@@ -1773,7 +1885,6 @@ def show_meal_add():
                                 if normalize(manual_search) in normalize(food)
                             ]
 
-                            # 手動検索候補にも現在選択中のものを残す
                             if selected_food not in manual_candidates and selected_food in food_master:
                                 manual_candidates = [selected_food] + manual_candidates
 
@@ -1784,25 +1895,24 @@ def show_meal_add():
                                     "手動検索候補",
                                     manual_candidates,
                                     format_func=format_food_label,
-                                    key=f"{recipe_key}_manual_food_{j}"
+                                    key=f"{recipe_key}_manual_food_{uid}"
                                 )
                             else:
                                 st.warning("手動検索候補が見つかりません")
 
                         default_g = parse_amount(
-                            ing_amount,
+                            edited_amount,
                             food_name=selected_food,
                             nutrition_dict=nutrition_dict
                         )
-
-                                # 10g単位に寄せる
-                        default_g_rounded = round(float(default_g) / 10) * 10 if float(default_g) > 0 else 0.0
+                        default_g_rounded = int(round(float(default_g) / 10) * 10) if float(default_g) > 0 else 0
 
                         gram = st.number_input(
                             "分量（g）",
-                            value=float(default_g_rounded),
-                            step=10.0,
-                            key=f"{recipe_key}_gram_{j}"
+                            value=default_g_rounded,
+                            step=10,
+                            format="%d",
+                            key=f"{recipe_key}_gram_{uid}"
                         )
 
                         nut = nutrition_dict.get(selected_food, {})
@@ -1819,22 +1929,183 @@ def show_meal_add():
                         })
 
                         mapping_items_to_save.append((
-                            ing_name,
+                            edited_name,
                             selected_food
                         ))
 
+                    # 削除はループ後にまとめて
+                    if delete_uid is not None:
+                        st.session_state[state_key] = [
+                            x for x in st.session_state[state_key]
+                            if x["uid"] != delete_uid
+                        ]
+                        st.rerun()
+
                     preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
-                    per_person_preview = divide_nutrition(preview_nut, servings)
+                    per_person_preview = divide_nutrition(preview_nut, original_servings)
+
+                    multiplier = st.number_input(
+                        "登録倍率",
+                        min_value=1,
+                        value=1,
+                        step=1,
+                        format="%d",
+                        key=f"{recipe_key}_multiplier"
+                    )
+
+                    registered_per_person_nut = {
+                        k: v * multiplier for k, v in per_person_preview.items()
+                    }
 
                     st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
+                    st.write(f"登録される 1人分: {registered_per_person_nut['kcal']:.1f} kcal")
+
+                    scaled_ingredients = []
+                    for ing_item in selected_ingredients:
+                        scaled_ingredients.append({
+                            "food": ing_item["food"],
+                            "gram": ing_item["gram"] * multiplier
+                        })
 
                     save_queue.append({
                         "type": "recipe",
                         "title": title,
-                        "ingredients": selected_ingredients,
-                        "servings": servings,
+                        "ingredients": scaled_ingredients,
+                        "servings": original_servings,
                         "mapping_items": mapping_items_to_save
-                    })
+                    })            
+            # elif item["type"] == "recipe":
+            #     detail = item["detail"]
+            #     title = detail["title"]
+            #     url = detail["url"]
+            #     servings = detail["servings"]
+            #     raw_ingredients = detail["ingredients"]
+
+            #     st.write(f"**{title}**")
+            #     st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal")
+            #     st.markdown(f"[レシピを開く]({url})")
+
+            #     recipe_key = f"meal_add_recipe_{i}"
+
+            #     with st.expander("材料と分量を確認・編集", expanded=True):
+            #         selected_ingredients = []
+            #         mapping_items_to_save = []
+
+            #         for j, ing in enumerate(raw_ingredients):
+            #             ing_name = ing["name"]
+            #             ing_amount = ing["amount"]
+
+            #             st.markdown(f"### {ing_name}")
+            #             st.caption(f"元の表記: {ing_amount}")
+
+            #             # =========================
+            #             # 自動検索候補
+            #             # =========================
+            #             candidates = [
+            #                 food for food in food_master
+            #                 if normalize(ing_name) in normalize(food)
+            #             ]
+
+            #             # mapping履歴があるなら必ず追加
+            #             if ing_name in mapping:
+            #                 for saved_food in mapping[ing_name].keys():
+            #                     if saved_food not in candidates:
+            #                         candidates.append(saved_food)
+
+            #             candidates = get_sorted_candidates(
+            #                 ing_name,
+            #                 candidates,
+            #                 mapping
+            #             )
+
+            #             if not candidates:
+            #                 candidates = food_master[:30]
+            #             else:
+            #                 candidates = candidates[:50]
+
+            #             selected_food = st.selectbox(
+            #                 "自動検索",
+            #                 candidates,
+            #                 format_func=format_food_label,
+            #                 key=f"{recipe_key}_food_{j}"
+            #             )
+
+            #             # =========================
+            #             # 手動検索
+            #             # =========================
+            #             manual_search = st.text_input(
+            #                 "手動検索",
+            #                 key=f"{recipe_key}_search_{j}"
+            #             )
+
+            #             if manual_search.strip():
+            #                 manual_candidates = [
+            #                     food for food in food_master
+            #                     if normalize(manual_search) in normalize(food)
+            #                 ]
+
+            #                 # 手動検索候補にも現在選択中のものを残す
+            #                 if selected_food not in manual_candidates and selected_food in food_master:
+            #                     manual_candidates = [selected_food] + manual_candidates
+
+            #                 manual_candidates = manual_candidates[:50]
+
+            #                 if manual_candidates:
+            #                     selected_food = st.selectbox(
+            #                         "手動検索候補",
+            #                         manual_candidates,
+            #                         format_func=format_food_label,
+            #                         key=f"{recipe_key}_manual_food_{j}"
+            #                     )
+            #                 else:
+            #                     st.warning("手動検索候補が見つかりません")
+
+            #             default_g = parse_amount(
+            #                 ing_amount,
+            #                 food_name=selected_food,
+            #                 nutrition_dict=nutrition_dict
+            #             )
+
+            #             # 10g単位に寄せる
+            #             default_g_rounded = int(round(float(default_g) / 10) * 10) if float(default_g) > 0 else 0
+
+            #             gram = st.number_input(
+            #                 "分量（g）",
+            #                 value=default_g_rounded,
+            #                 step=10,
+            #                 key=f"{recipe_key}_gram_{j}"
+            #             )
+
+            #             nut = nutrition_dict.get(selected_food, {})
+            #             kcal = safe_float(nut.get("エネルギー", 0)) * gram / 100
+
+            #             st.markdown(
+            #                 f'<div class="ing-kcal">約 {kcal:.1f} kcal</div>',
+            #                 unsafe_allow_html=True
+            #             )
+
+            #             selected_ingredients.append({
+            #                 "food": selected_food,
+            #                 "gram": gram
+            #             })
+
+            #             mapping_items_to_save.append((
+            #                 ing_name,
+            #                 selected_food
+            #             ))
+
+            #         preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
+            #         per_person_preview = divide_nutrition(preview_nut, servings)
+
+            #         st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
+
+            #         save_queue.append({
+            #             "type": "recipe",
+            #             "title": title,
+            #             "ingredients": selected_ingredients,
+            #             "servings": servings,
+            #             "mapping_items": mapping_items_to_save
+            #         })
     
         if st.button("完了"):
             all_mapping_items = []
@@ -2129,9 +2400,9 @@ def show_recipe_search():
     
         coords = [
         (220,240,820,340),
-        (220,480,820,570),
+        (220,480,820,560),
         (220,700,820,810),
-        (220,930,820,1020)
+        (220,930,820,1040)
         ]
     
         for x1,y1,x2,y2 in coords:
@@ -2221,36 +2492,7 @@ def show_recipe_search():
 
 
     
-    # =========================
-    # 水や少々を除外する関数
-    # ========================= 
-    IGNORE_INGREDIENTS = [
-        "水",
-        "お湯",
-        "熱湯",
-        "氷",
-        "湯",
-    ]
-    
-    IGNORE_WORDS = [
-        "適量",
-        "少々",
-        "適宜",
-    ]
-    
-    def is_ignored_ingredient(name):
-        name_n = normalize(name)
-    
-        return any(word in name_n for word in IGNORE_INGREDIENTS)
-    
-    def is_ignored_amount(amount):
-    
-        if amount is None:
-            return False
-    
-        amount = str(amount)
-    
-        return any(word in amount for word in IGNORE_WORDS)
+
     
     
     mapping = load_mapping()
@@ -3178,7 +3420,7 @@ def show_recipe_edit():
     with col2:
         multiplier = st.selectbox(
             "🔢 分量倍率",
-            [0.5, 0.75, 1, 1.25, 1.5, 2, 3],
+            [0.5, 0.75, 1, 1.25, 1.5, 2,2.5, 3],
             index=2,
             key=f"edit_multi_{url}"
         )
@@ -3322,8 +3564,8 @@ def show_recipe_edit():
                 with colA:
                     amount = st.number_input(
                         "グラム",
-                        value=float(display_g),
-                        step=1.0,
+                        value=int(display_g),
+                        step=10,
                         key=f"edit_{url}_{ing['uid']}_amt_{multiplier}_{item_multiplier}"
                     )
 
