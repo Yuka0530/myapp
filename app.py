@@ -1056,7 +1056,7 @@ def show_dashboard():
 
     st.divider()
 
-    if st.button("📊1日分の栄養グラフ"):
+    if st.button("📊アドバイス"):
         st.session_state.graph_target = "daily"
         st.session_state.page = "nutrition_graph"
         st.rerun()
@@ -1074,9 +1074,10 @@ def show_dashboard():
         "朝食": "🌅",
         "昼食": "☀️",
         "夕食": "🌙",
+        "間食": "🍪",
     }
 
-    for meal in ["朝食", "昼食", "夕食"]:
+    for meal in ["朝食", "昼食", "夕食", "間食"]:
         rows = today[today["meal_type"] == meal].copy()
         total_kcal = rows["kcal_num"].sum()
 
@@ -1088,8 +1089,9 @@ def show_dashboard():
             col1, col2, col3 = st.columns([6, 2.5, 0.8], vertical_alignment="center", gap="small")
 
             with col1:
+                icon = meal_icons.get(meal, "")
                 st.markdown(
-                    f'<div class="custom-meal-title">{meal}</div>',
+                    f'<div class="custom-meal-title">{icon} {meal}</div>',
                     unsafe_allow_html=True
                 )
 
@@ -1167,12 +1169,11 @@ def show_dashboard():
 # 栄養グラフ画面
 # =========================
 def show_nutrition_graph():
-
     logs = load_meal_log().copy()
 
     numeric_cols = [
-        "kcal","protein","fat","carb","calcium","iron",
-        "vitA","vitE","vitB1","vitB2","vitC","fiber","salt"
+        "kcal", "protein", "fat", "carb", "calcium", "iron",
+        "vitA", "vitE", "vitB1", "vitB2", "vitC", "fiber", "salt"
     ]
 
     for c in numeric_cols:
@@ -1182,24 +1183,59 @@ def show_nutrition_graph():
             logs[c] = 0
 
     today = logs[logs["date"] == str(st.session_state.selected_date)].copy()
-
     graph_target = st.session_state.get("graph_target", "daily")
 
     full_target = {
-        "kcal":1600,
-        "protein":60,
-        "fat":44,
-        "carb":240,
-        "fiber":18,
-        "salt":6.5,
-        "calcium":700,
-        "iron":8,
-        "vitA":750,
-        "vitE":6.5,
-        "vitB1":1,
-        "vitB2":1.2,
-        "vitC":100
+        "kcal": 1600,
+        "protein": 60,
+        "fat": 44,
+        "carb": 240,
+        "fiber": 18,
+        "salt": 6.5,
+        "calcium": 700,
+        "iron": 8,
+        "vitA": 750,
+        "vitE": 6.5,
+        "vitB1": 1,
+        "vitB2": 1.2,
+        "vitC": 100
     }
+
+    upper_limit = {
+        "vitA": 2700,
+        "vitE": 700,
+        "iron": 40,
+        "calcium": 2500
+    }
+
+    labels = {
+        "kcal": "エネルギー",
+        "protein": "たんぱく質",
+        "fat": "脂質",
+        "carb": "炭水化物",
+        "fiber": "食物繊維",
+        "salt": "塩分",
+        "calcium": "カルシウム",
+        "iron": "鉄",
+        "vitA": "ビタミンA",
+        "vitE": "ビタミンE",
+        "vitB1": "ビタミンB1",
+        "vitB2": "ビタミンB2",
+        "vitC": "ビタミンC"
+    }
+
+    nutrient_order = [
+        "kcal", "protein", "fat", "carb", "fiber", "salt",
+        "calcium", "iron", "vitA", "vitE", "vitB1", "vitB2", "vitC"
+    ]
+
+    # 小数1桁で表示したい栄養素
+    decimal_nutrients = {"fiber", "salt", "iron", "vitE", "vitB1", "vitB2"}
+
+    def format_amount_text(nut, intake, base):
+        if nut in decimal_nutrients:
+            return f"{intake:.1f} / {base:.1f}"
+        return f"{round(intake):.0f} / {round(base):.0f}"
 
     if graph_target == "meal_type":
         meal_type = st.session_state.get("meal_type", "朝食")
@@ -1208,147 +1244,416 @@ def show_nutrition_graph():
         ratio_map = {
             "朝食": 0.17,
             "昼食": 0.35,
-            "夕食": 0.35
+            "夕食": 0.35,
+            "間食": 0.13,
         }
         meal_ratio = ratio_map.get(meal_type, 0.35)
-
-        target = {
-            k: v * meal_ratio
-            for k, v in full_target.items()
-        }
+        target = {k: v * meal_ratio for k, v in full_target.items()}
 
         st.title(f"{meal_type} の栄養グラフ")
         st.caption(f"基準値は1日分の {meal_ratio*100:.0f}%")
+        group_col = "recipe"
+        legend_title = "レシピ"
     else:
         target = full_target
         st.title("1日分の栄養グラフ")
+        group_col = "meal_type"
+        legend_title = "食事区分"
 
+    if today.empty:
+        st.info("この日の記録がありません")
+        if st.button("←戻る"):
+            st.session_state.page = "dashboard"
+            st.rerun()
+        return
+
+    today[group_col] = today[group_col].fillna("").replace("", "未分類")
+
+    if group_col == "meal_type":
+        desired_order = ["朝食", "昼食", "夕食", "間食"]
+        group_names = [g for g in desired_order if g in today[group_col].unique().tolist()]
+        others = [g for g in today[group_col].unique().tolist() if g not in desired_order]
+        group_names += others
+    else:
+        group_names = today[group_col].drop_duplicates().tolist()
+
+    grouped = today.groupby(group_col)[numeric_cols].sum(numeric_only=True)
     totals = today[numeric_cols].sum()
 
-    upper_limit = {
-        "vitA":2700,
-        "vitE":700,
-        "iron":40,
-        "calcium":2500
+    ratio_df = pd.DataFrame(0.0, index=group_names, columns=nutrient_order)
+
+    for group_name in group_names:
+        if group_name not in grouped.index:
+            continue
+        for nut in nutrient_order:
+            intake = float(grouped.loc[group_name, nut])
+            base = float(target.get(nut, 0))
+            ratio_df.loc[group_name, nut] = intake / base * 100 if base > 0 else 0
+
+    if group_col == "meal_type":
+        color_map = {
+            "朝食": "#f6bd60",
+            "昼食": "#84a59d",
+            "夕食": "#f28482",
+            "間食": "#cdb4db",
+            "未分類": "#bdbdbd",
+        }
+    else:
+        recipe_palette = [
+            "#f6bd60", "#84a59d", "#f28482", "#cdb4db", "#90dbf4",
+            "#a7c957", "#ffafcc", "#bde0fe", "#ffd6a5", "#b8c0ff"
+        ]
+        color_map = {
+            name: recipe_palette[i % len(recipe_palette)]
+            for i, name in enumerate(group_names)
+        }
+
+    status_bg_map = {
+        "不足": "#dceeff",
+        "適正": "#e3f4df",
+        "過剰": "#ffe3d9"
     }
 
-    labels = {
-        "kcal":"エネルギー",
-        "protein":"たんぱく質",
-        "fat":"脂質",
-        "carb":"炭水化物",
-        "fiber":"食物繊維",
-        "salt":"塩分",
-        "calcium":"カルシウム",
-        "iron":"鉄",
-        "vitA":"ビタミンA",
-        "vitE":"ビタミンE",
-        "vitB1":"ビタミンB1",
-        "vitB2":"ビタミンB2",
-        "vitC":"ビタミンC"
-    }
-
+    y_labels = [labels[n] for n in nutrient_order]
     fig = go.Figure()
 
-    y_labels = []
-    ratios = []
-    colors = []
-    texts = []
+    status_list = []
+    amount_list = []
 
-    for k in target:
-        intake = totals.get(k, 0)
-        base = target[k]
-
+    for nut in nutrient_order:
+        intake = float(totals.get(nut, 0))
+        base = float(target.get(nut, 0))
         ratio = intake / base * 100 if base > 0 else 0
 
-        if k in ["kcal", "protein", "fat", "carb"]:
+        if nut in ["kcal", "protein", "fat", "carb"]:
             low = 90
             high = 120
-
-        elif k in upper_limit:
+        elif nut in upper_limit:
             low = 100
-            high = min(upper_limit[k] / base * 100, 200)
-
-        elif k == "salt":
+            high = min(upper_limit[nut] / base * 100, 200)
+        elif nut == "salt":
             low = 0
             high = 100
-
         else:
             low = 100
             high = None
 
         if ratio < low:
             status = "不足"
-            color = "#4da3ff"
-        elif high and ratio > high:
+        elif high is not None and ratio > high:
             status = "過剰"
-            color = "#ff6b3d"
         else:
             status = "適正"
-            color = "#66bb44"
 
-        y_labels.append(labels[k])
-        ratios.append(ratio)
-        colors.append(color)
+        status_list.append(status)
+        amount_list.append(format_amount_text(nut, intake, base))
 
-        texts.append(
-            f"{status}<br>{intake:.1f} / {base:.1f}"
-        )
+    # X軸固定
+    x_max = 200
 
-        if high:
+    for idx, nut in enumerate(nutrient_order):
+        base = float(target.get(nut, 0))
+
+        if nut in ["kcal", "protein", "fat", "carb"]:
+            low = 90
+            high = 120
+        elif nut in upper_limit:
+            low = 100
+            high = min(upper_limit[nut] / base * 100, 200)
+        elif nut == "salt":
+            low = 0
+            high = 100
+        else:
+            low = 100
+            high = None
+
+        if high is not None:
             fig.add_shape(
                 type="rect",
                 x0=low,
                 x1=high,
-                y0=len(y_labels)-1.4,
-                y1=len(y_labels)-0.6,
+                y0=idx - 0.4,
+                y1=idx + 0.4,
                 fillcolor="rgba(120,200,120,0.25)",
-                line_width=0
+                line_width=0,
+                layer="below"
             )
 
         fig.add_shape(
             type="line",
             x0=100,
             x1=100,
-            y0=len(y_labels)-1.4,
-            y1=len(y_labels)-0.6,
-            line=dict(
-                color="gray",
-                width=2,
-                dash="dot"
-            )
+            y0=idx - 0.4,
+            y1=idx + 0.4,
+            line=dict(color="gray", width=2, dash="dot")
         )
 
-    fig.add_trace(go.Bar(
-        x=ratios,
-        y=y_labels,
-        orientation="h",
-        marker_color=colors,
-        text=texts,
-        textposition="outside"
-    ))
+    for group_name in group_names:
+        fig.add_trace(go.Bar(
+            x=[float(ratio_df.loc[group_name, nut]) for nut in nutrient_order],
+            y=y_labels,
+            orientation="h",
+            name=group_name,
+            marker_color=color_map.get(group_name, "#bdbdbd"),
+            hovertemplate=f"{legend_title}: {group_name}<extra></extra>"
+        ))
+
+    # 左：判定
+    for i, y in enumerate(y_labels):
+        fig.add_annotation(
+            x=0.0,
+            xref="paper",
+            y=y,
+            yref="y",
+            text=status_list[i],
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
+            font=dict(size=11, color="#4b4038"),
+            bgcolor=status_bg_map[status_list[i]],
+            bordercolor="rgba(0,0,0,0)",
+            borderpad=3
+        )
+
+    # 右：数値
+    for i, y in enumerate(y_labels):
+        fig.add_annotation(
+            x=1.0,
+            xref="paper",
+            y=y,
+            yref="y",
+            text=amount_list[i],
+            showarrow=False,
+            xanchor="right",
+            yanchor="middle",
+            font=dict(size=11, color="#6b625c")
+        )
 
     fig.update_layout(
-        height=650,
+        barmode="stack",
+        height=500,
         xaxis_title="基準値比 (%)",
-        yaxis=dict(autorange="reversed"),
-        showlegend=False,
+        xaxis=dict(
+            range=[0, 200],
+            zeroline=False,
+            domain=[0.23, 0.85],
+            tickvals=[0, 50, 100, 150, 200]
+        ),
+        yaxis=dict(
+            autorange="reversed",
+            automargin=True,
+            tickfont=dict(size=11)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.18,
+            xanchor="center",
+            x=0.5,
+            title_text="",
+            font=dict(size=11)
+        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.8)",
-        margin=dict(l=20, r=20, t=20, b=20),
-        font=dict(size=14)
+        margin=dict(l=10, r=10, t=20, b=100),
+        font=dict(size=13)
     )
 
-    fig.update_traces(
-        textfont_size=12,
-        marker_line_width=0
-    )
+    fig.update_traces(marker_line_width=0)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"responsive": True}
+    )
 
     if st.button("←戻る"):
         st.session_state.page = "dashboard"
         st.rerun()
+# def show_nutrition_graph():
+
+#     logs = load_meal_log().copy()
+
+#     numeric_cols = [
+#         "kcal","protein","fat","carb","calcium","iron",
+#         "vitA","vitE","vitB1","vitB2","vitC","fiber","salt"
+#     ]
+
+#     for c in numeric_cols:
+#         if c in logs.columns:
+#             logs[c] = pd.to_numeric(logs[c], errors="coerce").fillna(0)
+#         else:
+#             logs[c] = 0
+
+#     today = logs[logs["date"] == str(st.session_state.selected_date)].copy()
+
+#     graph_target = st.session_state.get("graph_target", "daily")
+
+#     full_target = {
+#         "kcal":1600,
+#         "protein":60,
+#         "fat":44,
+#         "carb":240,
+#         "fiber":18,
+#         "salt":6.5,
+#         "calcium":700,
+#         "iron":8,
+#         "vitA":750,
+#         "vitE":6.5,
+#         "vitB1":1,
+#         "vitB2":1.2,
+#         "vitC":100
+#     }
+
+#     if graph_target == "meal_type":
+#         meal_type = st.session_state.get("meal_type", "朝食")
+#         today = today[today["meal_type"] == meal_type].copy()
+
+#         ratio_map = {
+#             "朝食": 0.17,
+#             "昼食": 0.35,
+#             "夕食": 0.35,
+#             "間食": 0.13,
+#         }
+#         meal_ratio = ratio_map.get(meal_type, 0.35)
+
+#         target = {
+#             k: v * meal_ratio
+#             for k, v in full_target.items()
+#         }
+
+#         st.title(f"{meal_type} の栄養グラフ")
+#         st.caption(f"基準値は1日分の {meal_ratio*100:.0f}%")
+#     else:
+#         target = full_target
+#         st.title("1日分の栄養グラフ")
+
+#     totals = today[numeric_cols].sum()
+
+#     upper_limit = {
+#         "vitA":2700,
+#         "vitE":700,
+#         "iron":40,
+#         "calcium":2500
+#     }
+
+#     labels = {
+#         "kcal":"エネルギー",
+#         "protein":"たんぱく質",
+#         "fat":"脂質",
+#         "carb":"炭水化物",
+#         "fiber":"食物繊維",
+#         "salt":"塩分",
+#         "calcium":"カルシウム",
+#         "iron":"鉄",
+#         "vitA":"ビタミンA",
+#         "vitE":"ビタミンE",
+#         "vitB1":"ビタミンB1",
+#         "vitB2":"ビタミンB2",
+#         "vitC":"ビタミンC"
+#     }
+
+#     fig = go.Figure()
+
+#     y_labels = []
+#     ratios = []
+#     colors = []
+#     texts = []
+
+#     for k in target:
+#         intake = totals.get(k, 0)
+#         base = target[k]
+
+#         ratio = intake / base * 100 if base > 0 else 0
+
+#         if k in ["kcal", "protein", "fat", "carb"]:
+#             low = 90
+#             high = 120
+
+#         elif k in upper_limit:
+#             low = 100
+#             high = min(upper_limit[k] / base * 100, 200)
+
+#         elif k == "salt":
+#             low = 0
+#             high = 100
+
+#         else:
+#             low = 100
+#             high = None
+
+#         if ratio < low:
+#             status = "不足"
+#             color = "#4da3ff"
+#         elif high and ratio > high:
+#             status = "過剰"
+#             color = "#ff6b3d"
+#         else:
+#             status = "適正"
+#             color = "#66bb44"
+
+#         y_labels.append(labels[k])
+#         ratios.append(ratio)
+#         colors.append(color)
+
+#         texts.append(
+#             f"{status}<br>{intake:.1f} / {base:.1f}"
+#         )
+
+#         if high:
+#             fig.add_shape(
+#                 type="rect",
+#                 x0=low,
+#                 x1=high,
+#                 y0=len(y_labels)-1.4,
+#                 y1=len(y_labels)-0.6,
+#                 fillcolor="rgba(120,200,120,0.25)",
+#                 line_width=0
+#             )
+
+#         fig.add_shape(
+#             type="line",
+#             x0=100,
+#             x1=100,
+#             y0=len(y_labels)-1.4,
+#             y1=len(y_labels)-0.6,
+#             line=dict(
+#                 color="gray",
+#                 width=2,
+#                 dash="dot"
+#             )
+#         )
+
+#     fig.add_trace(go.Bar(
+#         x=ratios,
+#         y=y_labels,
+#         orientation="h",
+#         marker_color=colors,
+#         text=texts,
+#         textposition="outside"
+#     ))
+
+#     fig.update_layout(
+#         height=650,
+#         xaxis_title="基準値比 (%)",
+#         yaxis=dict(autorange="reversed"),
+#         showlegend=False,
+#         paper_bgcolor="rgba(0,0,0,0)",
+#         plot_bgcolor="rgba(255,255,255,0.8)",
+#         margin=dict(l=20, r=20, t=20, b=20),
+#         font=dict(size=14)
+#     )
+
+#     fig.update_traces(
+#         textfont_size=12,
+#         marker_line_width=0
+#     )
+
+#     st.plotly_chart(fig, use_container_width=True)
+
+#     if st.button("←戻る"):
+#         st.session_state.page = "dashboard"
+#         st.rerun()
 
 #デリッシュキッチン検索
 @st.cache_data(show_spinner=False)
