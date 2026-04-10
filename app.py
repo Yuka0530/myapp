@@ -17,6 +17,7 @@ import plotly.graph_objects as go
 import uuid
 import shutil
 import platform
+import textwrap
 
 # Windowsローカルだけ固定パスを使う
 if platform.system() == "Windows":
@@ -1031,7 +1032,84 @@ def is_ignored_amount(amount):
 
     return any(word in amount for word in IGNORE_WORDS)
 
+def render_daily_kcal_progress(today_logs, target_kcal=1600):
+    if "kcal" in today_logs.columns:
+        intake_kcal = pd.to_numeric(today_logs["kcal"], errors="coerce").fillna(0).sum()
+    else:
+        intake_kcal = 0
 
+    ratio = intake_kcal / target_kcal if target_kcal > 0 else 0
+
+    lower_ok = target_kcal * 0.9
+    upper_ok = target_kcal * 1.2
+
+    # バー全体を120%基準で表示
+    display_ratio = min(ratio / 1.2, 1.0)
+
+    # 目標値(100%)はバー全体の 100/120 = 83.33% の位置
+    target_line_pct = (target_kcal / upper_ok) * 100
+
+    ok_start = (lower_ok / upper_ok) * 100
+    ok_width = ((upper_ok - lower_ok) / upper_ok) * 100
+
+    if intake_kcal < lower_ok:
+        status = "不足"
+        status_bg = "#dceeff"
+        bar_color = "#7db7e8"
+        status_value = f"{lower_ok - intake_kcal:.0f} kcal"
+
+    elif intake_kcal <= upper_ok:
+        status = "適正"
+        status_bg = "#e3f4df"
+        bar_color = "#84c98a"
+        status_value = f"{intake_kcal:.0f} kcal"
+
+    else:
+        status = "超過"
+        status_bg = "#ffe3d9"
+        bar_color = "#f2b36d"
+        status_value = f"{intake_kcal - upper_ok:.0f} kcal"
+
+    html = (
+        f'<div style="background:rgba(255,255,255,0.92);border:1px solid #f0e4db;'
+        f'border-radius:20px;padding:14px 18px;box-shadow:0 4px 14px rgba(0,0,0,0.04);'
+        f'margin-bottom:16px;">'
+
+        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+        f'margin-bottom:8px;font-weight:700;color:#5b4d43;font-size:1rem;">'
+        f'<span>合計 {intake_kcal:.0f} kcal</span>'
+        f'<span>目標 {target_kcal:.0f} kcal</span>'
+        f'</div>'
+
+        f'<div style="width:100%;background:#eef3e8;border-radius:999px;height:24px;'
+        f'overflow:hidden;position:relative;">'
+
+        # 適正帯
+        f'<div style="position:absolute;left:{ok_start:.1f}%;width:{ok_width:.1f}%;'
+        f'top:0;bottom:0;background:#dcefd4;z-index:1;"></div>'
+
+        # 実際の摂取バー
+        f'<div style="width:{display_ratio*100:.1f}%;max-width:100%;background:{bar_color};'
+        f'height:100%;border-radius:999px;position:relative;z-index:2;"></div>'
+
+        # 目標値の点線
+        f'<div style="position:absolute;top:0;bottom:0;left:{target_line_pct:.1f}%;'
+        f'border-left:3px dotted #7ea04d;z-index:3;"></div>'
+
+        f'</div>'
+
+        f'<div style="display:flex;justify-content:center;align-items:center;gap:8px;'
+        f'margin-top:8px;">'
+        f'<span style="background:{status_bg};color:#4b4038;border-radius:10px;'
+        f'padding:3px 10px;font-weight:700;font-size:0.9rem;">{status}</span>'
+        f'<span style="color:#6b625c;font-size:0.98rem;font-weight:700;">'
+        f'{status_value}</span>'
+        f'</div>'
+
+        f'</div>'
+    )
+
+    st.markdown(html, unsafe_allow_html=True)
 # =========================
 # ダッシュボード
 # =========================
@@ -1069,6 +1147,8 @@ def show_dashboard():
         logs["kcal_num"] = 0
 
     today = logs[logs["date"] == str(st.session_state.selected_date)]
+
+    render_daily_kcal_progress(today, target_kcal=1600)
 
     meal_icons = {
         "朝食": "🌅",
