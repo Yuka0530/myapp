@@ -372,6 +372,39 @@ def safe_float(x):
 def normalize(text):
     return str(text).replace("\u3000","").replace(" ","").strip()
 
+def parse_spoon_count(text):
+    text = str(text).replace("１", "1").replace("２", "2").replace("３", "3") \
+                    .replace("４", "4").replace("５", "5").replace("６", "6") \
+                    .replace("７", "7").replace("８", "8").replace("９", "9") \
+                    .replace("０", "0")
+
+    # ① 1と1/2 の形
+    mixed_match = re.search(r'(\d+(?:\.\d+)?)\s*と\s*(\d+)\s*/\s*(\d+)', text)
+    if mixed_match:
+        whole = float(mixed_match.group(1))
+        num = float(mixed_match.group(2))
+        den = float(mixed_match.group(3))
+        return whole + num / den
+
+    # ② 1 1/2 の形にも対応したいなら
+    mixed_space_match = re.search(r'(\d+(?:\.\d+)?)\s+(\d+)\s*/\s*(\d+)', text)
+    if mixed_space_match:
+        whole = float(mixed_space_match.group(1))
+        num = float(mixed_space_match.group(2))
+        den = float(mixed_space_match.group(3))
+        return whole + num / den
+
+    # ③ 1/2 の形
+    frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
+    if frac_match:
+        return float(frac_match.group(1)) / float(frac_match.group(2))
+
+    # ④ 1.5 や 1 の形
+    num = re.findall(r'\d+(?:\.\d+)?', text)
+    if num:
+        return float(num[0])
+
+    return 1
 
 def parse_amount(text, food_name=None, nutrition_dict=None):
 
@@ -393,12 +426,7 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
     if "大さじ" in text:
     
         # ⭐ 分数チェック
-        frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
-        if frac_match:
-            count = float(frac_match.group(1)) / float(frac_match.group(2))
-        else:
-            num = re.findall(r'\d+(?:\.\d+)?', text)
-            count = float(num[0]) if num else 1
+        count = parse_spoon_count(text)
     
         gram = get_spoon_weight(food_name, "tbsp")
     
@@ -410,12 +438,7 @@ def parse_amount(text, food_name=None, nutrition_dict=None):
     # ③ 小さじ
     if "小さじ" in text:
     
-        frac_match = re.search(r'(\d+)\s*/\s*(\d+)', text)
-        if frac_match:
-            count = float(frac_match.group(1)) / float(frac_match.group(2))
-        else:
-            num = re.findall(r'\d+(?:\.\d+)?', text)
-            count = float(num[0]) if num else 1
+        count = parse_spoon_count(text)
     
         gram = get_spoon_weight(food_name, "tsp")
     
@@ -1056,7 +1079,7 @@ def render_daily_kcal_progress(today_logs, target_kcal=1600):
         status = "不足"
         status_bg = "#dceeff"
         bar_color = "#7db7e8"
-        status_value = f"{lower_ok - intake_kcal:.0f} kcal"
+        status_value = f"{target_kcal - intake_kcal:.0f} kcal"
 
     elif intake_kcal <= upper_ok:
         status = "適正"
@@ -1068,7 +1091,7 @@ def render_daily_kcal_progress(today_logs, target_kcal=1600):
         status = "超過"
         status_bg = "#ffe3d9"
         bar_color = "#f2b36d"
-        status_value = f"{intake_kcal - upper_ok:.0f} kcal"
+        status_value = f"{intake_kcal - target_kcal:.0f} kcal"
 
     html = (
         f'<div style="background:rgba(255,255,255,0.92);border:1px solid #f0e4db;'
