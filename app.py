@@ -514,6 +514,7 @@ SPOON_WEIGHT = {
     "コチュジャン": {"tbsp": 18, "tsp": 7},
     "味噌": {"tbsp": 18, "tsp": 6},
     "みそ": {"tbsp": 18, "tsp": 6},
+    "ごま": {"tbsp": 10, "tsp": 3},
 }
 
 
@@ -661,18 +662,20 @@ def save_meal_log_base(date, meal_type, recipe, servings=1):
     return new_id
 
 def save_ingredients(meal_id, ingredients):
-
     client = connect_gsheet()
     sheet = client.open("food_mapping").worksheet("meal_ingredients")
 
     rows = []
 
     for ing in ingredients:
-
         rows.append([
             meal_id,
-            ing["food"],
-            ing["gram"]
+            ing.get("food", ""),
+            ing.get("gram", 0),
+            ing.get("original_name", ""),
+            ing.get("original_amount", ""),
+            ing.get("source_url", ""),
+            ing.get("original_servings", "")
         ])
 
     sheet.append_rows(rows)
@@ -723,6 +726,12 @@ def calc_nutrition(ingredients, nutrition_dict):
         "fiber":fiber,
         "salt":salt
     }
+
+def calc_ingredient_kcal(food, gram, nutrition_dict):
+    nut = nutrition_dict.get(food)
+    if not nut:
+        return 0.0
+    return safe_float(nut.get("エネルギー", 0)) * safe_float(gram) / 100
 
 def divide_nutrition(nut, servings):
     if not servings or servings == 0:
@@ -809,8 +818,12 @@ def get_meal_ingredients_by_id(meal_id):
     for _, r in rows.iterrows():
         ingredients.append({
             "uid": str(uuid.uuid4()),
-            "food": r["food"],
-            "gram": safe_float(r["gram"])
+            "food": r.get("food", ""),
+            "gram": safe_float(r.get("gram", 0)),
+            "original_name": r.get("original_name", ""),
+            "original_amount": r.get("original_amount", ""),
+            "source_url": r.get("source_url", ""),
+            "original_servings": r.get("original_servings", "")
         })
     return ingredients
 
@@ -833,8 +846,12 @@ def replace_meal_ingredients(meal_id, ingredients):
     for ing in ingredients:
         new_rows.append([
             str(meal_id),
-            ing["food"],
-            ing["gram"]
+            ing.get("food", ""),
+            ing.get("gram", 0),
+            ing.get("original_name", ""),
+            ing.get("original_amount", ""),
+            ing.get("source_url", ""),
+            ing.get("original_servings", "")
         ])
 
     sheet.clear()
@@ -993,8 +1010,12 @@ def save_my_recipe_ingredients(recipe_id, ingredients):
     for ing in ingredients:
         rows.append([
             recipe_id,
-            ing["food"],
-            ing["gram"]
+            ing.get("food", ""),
+            ing.get("gram", 0),
+            ing.get("original_name", ""),
+            ing.get("original_amount", ""),
+            ing.get("source_url", ""),
+            ing.get("original_servings", "")
         ])
 
     if rows:
@@ -1017,8 +1038,12 @@ def get_my_recipe_ingredients_by_id(recipe_id):
     for _, r in rows.iterrows():
         ingredients.append({
             "uid": str(uuid.uuid4()),
-            "food": r["food"],
-            "gram": safe_float(r["gram"])
+            "food": r.get("food", ""),
+            "gram": safe_float(r.get("gram", 0)),
+            "original_name": r.get("original_name", ""),
+            "original_amount": r.get("original_amount", ""),
+            "source_url": r.get("source_url", ""),
+            "original_servings": r.get("original_servings", "")
         })
     return ingredients
 
@@ -1038,8 +1063,12 @@ def replace_my_recipe_ingredients(recipe_id, ingredients):
     for ing in ingredients:
         new_rows.append([
             str(recipe_id),
-            ing["food"],
-            ing["gram"]
+            ing.get("food", ""),
+            ing.get("gram", 0),
+            ing.get("original_name", ""),
+            ing.get("original_amount", ""),
+            ing.get("source_url", ""),
+            ing.get("original_servings", "")
         ])
 
     sheet.clear()
@@ -4445,7 +4474,11 @@ def show_recipe_edit():
                 if safe_float(gram) > 0:
                     ingredients_for_save.append({
                         "food": item["selected_food"],
-                        "gram": gram
+                        "gram": gram,
+                        "original_name": item.get("original_name", item.get("name", "")),
+                        "original_amount": item.get("original_amount", item.get("amount", "")),
+                        "source_url": detail.get("url", ""),
+                        "original_servings": detail.get("servings", "")
                     })
 
             total_nut = calc_nutrition(
@@ -4686,6 +4719,24 @@ def show_saved_meal_edit():
         current_food = ing["food"]
         uid = ing["uid"]
 
+        original_name = ing.get("original_name", "")
+        original_amount = ing.get("original_amount", "")
+        source_url = ing.get("source_url", "")
+        original_servings = ing.get("original_servings", "")
+
+        if original_name or original_amount:
+            ref_lines = []
+            if original_name:
+                ref_lines.append(f"元の材料名: {original_name}")
+            if original_amount:
+                ref_lines.append(f"元の分量: {original_amount}")
+            if original_servings:
+                ref_lines.append(f"元の人数: {original_servings}")
+            st.caption(" / ".join(ref_lines))
+
+        if source_url:
+            st.markdown(f"[元レシピを開く]({source_url})")
+
         # 検索ワード入力
         search_key = f"saved_edit_search_{meal_id}_{uid}"
         default_search = st.session_state.get(search_key, current_food)
@@ -4747,8 +4798,19 @@ def show_saved_meal_edit():
         edited_ingredients.append({
             "uid": uid,
             "food": selected_food,
-            "gram": gram
+            "gram": gram,
+            "original_name": original_name,
+            "original_amount": original_amount,
+            "source_url": source_url,
+            "original_servings": original_servings
         })
+
+
+        item_kcal = calc_ingredient_kcal(selected_food, gram, nutrition_dict)
+        st.markdown(
+            f'<div class="ing-kcal">{gram:.1f} g で {item_kcal:.1f} kcal</div>',
+            unsafe_allow_html=True
+        )
 
     if len(st.session_state[edit_key]) == 0:
         st.info("材料がありません。材料を追加してください。")
@@ -5161,65 +5223,150 @@ def show_my_recipes():
 
 
 def show_my_recipe_edit():
-    render_meal_fixed_header(
-        back_page="my_recipes",
-        clear_on_back=False,
-        sublabel="マイレシピを編集"
-    )
+    st.title("マイレシピを編集")
 
     recipe_id = st.session_state.get("my_recipe_edit_id")
-    if not recipe_id:
-        st.warning("編集中のマイレシピがありません")
+    if recipe_id is None:
+        st.warning("編集対象がありません")
+        if st.button("← 戻る"):
+            st.session_state.page = "my_recipes"
+            st.rerun()
         return
 
     log = get_my_recipe_log_by_id(recipe_id)
-    ingredients = get_my_recipe_ingredients_by_id(recipe_id)
-
     if log is None:
-        st.error("マイレシピが見つかりません")
+        st.error("対象データが見つかりません")
+        if st.button("← 戻る"):
+            st.session_state.page = "my_recipes"
+            st.rerun()
         return
 
     nutrition_dict = load_nutrition()
+    food_master = list(nutrition_dict.keys())
 
-    recipe_name = st.text_input("レシピ名", value=log.get("recipe", ""), key=f"my_recipe_name_{recipe_id}")
+    edit_key = f"my_recipe_edit_ingredients_{recipe_id}"
+    if edit_key not in st.session_state:
+        st.session_state[edit_key] = get_my_recipe_ingredients_by_id(recipe_id)
+
+    recipe_name = st.text_input("料理名", value=log["recipe"])
     servings = st.number_input(
-        "何人分",
-        min_value=1.0,
-        value=safe_float(log.get("servings", 1)) or 1.0,
-        step=1.0,
-        key=f"my_recipe_servings_{recipe_id}"
+        "人数",
+        min_value=1,
+        step=1,
+        value=int(float(log["servings"])) if str(log["servings"]).strip() else 1
     )
+
+    delete_key = f"my_recipe_delete_target_{recipe_id}"
+    if delete_key not in st.session_state:
+        st.session_state[delete_key] = None
+
+    if st.session_state[delete_key] is not None:
+        delete_uid = st.session_state[delete_key]
+        st.session_state[edit_key] = [
+            ing for ing in st.session_state[edit_key]
+            if ing["uid"] != delete_uid
+        ]
+        st.session_state[delete_key] = None
+        st.rerun()
 
     edited_ingredients = []
 
-    for i, ing in enumerate(ingredients):
-        col1, col2 = st.columns([6, 3])
+    for i, ing in enumerate(st.session_state[edit_key]):
+        st.divider()
+        st.write(f"材料 {i+1}")
 
         current_food = ing["food"]
-        candidates = [current_food] + [f for f in food_master if f != current_food]
+        uid = ing["uid"]
 
-        with col1:
-            selected_food = st.selectbox(
-                f"食材 {i+1}",
-                options=candidates,
-                index=0,
-                format_func=format_food_label,
-                key=f"my_recipe_food_{recipe_id}_{i}"
-            )
+        original_name = ing.get("original_name", "")
+        original_amount = ing.get("original_amount", "")
+        source_url = ing.get("source_url", "")
+        original_servings = ing.get("original_servings", "")
 
-        with col2:
-            gram = st.number_input(
-                f"g {i+1}",
-                min_value=0.0,
-                value=safe_float(ing["gram"]),
-                step=1.0,
-                key=f"my_recipe_gram_{recipe_id}_{i}"
-            )
+        if original_name or original_amount or original_servings:
+            ref_lines = []
+            if original_name:
+                ref_lines.append(f"元の材料名: {original_name}")
+            if original_amount:
+                ref_lines.append(f"元の分量: {original_amount}")
+            if original_servings:
+                ref_lines.append(f"元の人数: {original_servings}")
+            st.caption(" / ".join(ref_lines))
+
+        if source_url:
+            st.markdown(f"[元レシピを開く]({source_url})")
+
+        search_key = f"my_recipe_edit_search_{recipe_id}_{uid}"
+        default_search = st.session_state.get(search_key, current_food)
+
+        search_word = st.text_input(
+            f"食材検索 {i+1}",
+            value=default_search,
+            key=search_key
+        )
+
+        if search_word.strip():
+            candidates = [
+                food for food in food_master
+                if normalize(search_word) in normalize(food)
+            ]
+        else:
+            candidates = [current_food] if current_food else []
+
+        if current_food and current_food not in candidates:
+            candidates = [current_food] + candidates
+
+        if not candidates:
+            candidates = food_master[:50]
+        else:
+            candidates = candidates[:50]
+
+        selected_food = st.selectbox(
+            f"候補 {i+1}",
+            candidates,
+            index=0,
+            format_func=format_food_label,
+            key=f"my_recipe_edit_food_{recipe_id}_{uid}"
+        )
+
+        gram = st.number_input(
+            f"グラム {i+1}",
+            min_value=0.0,
+            value=safe_float(ing["gram"]),
+            step=1.0,
+            key=f"my_recipe_edit_gram_{recipe_id}_{uid}"
+        )
+
+        item_kcal = calc_ingredient_kcal(selected_food, gram, nutrition_dict)
+        st.markdown(
+            f'<div class="ing-kcal">{gram:.1f} g で {item_kcal:.1f} kcal</div>',
+            unsafe_allow_html=True
+        )
+
+        if st.button("🗑", key=f"my_recipe_edit_delete_{recipe_id}_{uid}"):
+            st.session_state[delete_key] = uid
+            st.rerun()
 
         edited_ingredients.append({
             "food": selected_food,
-            "gram": gram
+            "gram": gram,
+            "original_name": original_name,
+            "original_amount": original_amount,
+            "source_url": source_url,
+            "original_servings": original_servings
         })
+
+    if st.button("＋材料を追加", key=f"my_recipe_add_row_{recipe_id}"):
+        st.session_state[edit_key].append({
+            "uid": str(uuid.uuid4()),
+            "food": "",
+            "gram": 0,
+            "original_name": "",
+            "original_amount": "",
+            "source_url": "",
+            "original_servings": ""
+        })
+        st.rerun()
 
     if st.button("保存", use_container_width=True, key=f"save_my_recipe_edit_{recipe_id}"):
         total_nut = calc_nutrition(edited_ingredients, nutrition_dict)
