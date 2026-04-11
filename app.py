@@ -4289,7 +4289,7 @@ def show_recipe_edit():
             st.session_state.selected_foods[url][ing["uid"]] = {
                 "original_name": original_name,
                 "selected_food": selected,
-                "original_amount": safe_float(ing["amount"])
+                "original_amount": str(ing.get("amount", "") or "")
             }
 
             nut = nutrition_dict[selected]
@@ -4683,12 +4683,28 @@ def show_saved_meal_edit():
         st.session_state[edit_key] = get_meal_ingredients_by_id(meal_id)
 
     recipe_name = st.text_input("料理名", value=row["recipe"])
+
+    source_url_top = ""
+    if st.session_state[edit_key]:
+        source_url_top = st.session_state[edit_key][0].get("source_url", "")
+
+    if source_url_top:
+        st.caption("元レシピ")
+        st.markdown(f"[元レシピを開く]({source_url_top})")
+
     servings = st.number_input(
         "人数",
         min_value=1,
         step=1,
         value=int(float(row["servings"])) if str(row["servings"]).strip() else 1
     )
+
+    original_servings_top = ""
+    if st.session_state[edit_key]:
+        original_servings_top = st.session_state[edit_key][0].get("original_servings", "")
+
+    if original_servings_top:
+        st.caption(f"元の人数: {original_servings_top}")
 
     delete_key = f"delete_target_{meal_id}"
 
@@ -4713,8 +4729,6 @@ def show_saved_meal_edit():
     edited_ingredients = []
 
     for i, ing in enumerate(st.session_state[edit_key]):
-        st.divider()
-        st.write(f"材料 {i+1}")
 
         # 現在値
         current_food = ing["food"]
@@ -4724,19 +4738,10 @@ def show_saved_meal_edit():
         original_amount = ing.get("original_amount", "")
         source_url = ing.get("source_url", "")
         original_servings = ing.get("original_servings", "")
+        
+        st.divider()
+        #st.write(f"元の材料名: {original_name}") if original_name else st.write("元の材料名: なし")
 
-        if original_name or original_amount:
-            ref_lines = []
-            if original_name:
-                ref_lines.append(f"元の材料名: {original_name}")
-            if original_amount:
-                ref_lines.append(f"元の分量: {original_amount}")
-            if original_servings:
-                ref_lines.append(f"元の人数: {original_servings}")
-            st.caption(" / ".join(ref_lines))
-
-        if source_url:
-            st.markdown(f"[元レシピを開く]({source_url})")
 
         # 検索ワード入力
         search_key = f"saved_edit_search_{meal_id}_{uid}"
@@ -4747,6 +4752,9 @@ def show_saved_meal_edit():
             value=default_search,
             key=search_key
         )
+
+        if original_name:
+            st.caption(f"もとの材料名: {original_name}")
 
         # nutrition_dictから候補検索
         if search_word.strip():
@@ -4788,6 +4796,7 @@ def show_saved_meal_edit():
                 value=int(ing["gram"]),
                 key=f"saved_edit_gram_{meal_id}_{uid}"
             )
+        st.write(f"元の分量: {original_amount}")
 
         with col2:
             st.write("")
