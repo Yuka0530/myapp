@@ -4288,7 +4288,8 @@ def show_recipe_edit():
 
             st.session_state.selected_foods[url][ing["uid"]] = {
                 "original_name": original_name,
-                "selected_food": selected
+                "selected_food": selected,
+                "original_amount": safe_float(ing["amount"])
             }
 
             nut = nutrition_dict[selected]
@@ -4474,7 +4475,7 @@ def show_recipe_edit():
                 if safe_float(gram) > 0:
                     ingredients_for_save.append({
                         "food": item["selected_food"],
-                        "gram": gram,
+                        "gram": safe_float(gram),
                         "original_name": item.get("original_name", item.get("name", "")),
                         "original_amount": item.get("original_amount", item.get("amount", "")),
                         "source_url": detail.get("url", ""),
@@ -4490,7 +4491,7 @@ def show_recipe_edit():
 
             save_my_recipe(
                 recipe_title=title,
-                servings=servings,
+                servings=servings_selected,
                 ingredients=ingredients_for_save
             )
 
@@ -5171,6 +5172,10 @@ def show_my_recipes():
         st.info("マイレシピはまだありません")
         return
 
+    # 追加: 新しい登録順にする
+    logs["id_num"] = pd.to_numeric(logs["id"], errors="coerce")
+    logs = logs.sort_values("id_num", ascending=False)
+
     logs["recipe"] = logs["recipe"].fillna("")
     keyword = st.text_input("キーワードで絞り込み", "")
 
@@ -5223,7 +5228,11 @@ def show_my_recipes():
 
 
 def show_my_recipe_edit():
-    st.title("マイレシピを編集")
+    render_meal_fixed_header(
+        back_page="my_recipes",
+        clear_on_back=False,
+        sublabel="保存したマイレシピを編集"
+    )
 
     recipe_id = st.session_state.get("my_recipe_edit_id")
     if recipe_id is None:
@@ -5368,19 +5377,32 @@ def show_my_recipe_edit():
         })
         st.rerun()
 
-    if st.button("保存", use_container_width=True, key=f"save_my_recipe_edit_{recipe_id}"):
-        total_nut = calc_nutrition(edited_ingredients, nutrition_dict)
-        per_person_nut = divide_nutrition(total_nut, servings)
+    col1, col2 = st.columns(2)
 
-        update_my_recipe_log_full(recipe_id, recipe_name, servings, per_person_nut)
-        replace_my_recipe_ingredients(recipe_id, edited_ingredients)
+    with col1:
+        if st.button("← 戻る", key=f"back_my_recipe_edit_bottom_{recipe_id}", use_container_width=True):
+            st.session_state.page = "my_recipes"
+            st.rerun()
 
-        load_my_recipe_log.clear()
-        load_my_recipe_ingredients.clear()
+    with col2:
+        if st.button("保存", key=f"save_my_recipe_edit_{recipe_id}", use_container_width=True):
+            total_nut = calc_nutrition(st.session_state[edit_key], nutrition_dict)
+            per_person_nut = divide_nutrition(total_nut, servings)
 
-        st.success("更新しました")
-        st.session_state.page = "my_recipes"
-        st.rerun()
+            update_my_recipe_log_full(
+                recipe_id=recipe_id,
+                recipe=recipe_name,
+                servings=servings,
+                nut=per_person_nut
+            )
+            replace_my_recipe_ingredients(recipe_id, st.session_state[edit_key])
+
+            load_my_recipe_log.clear()
+            load_my_recipe_ingredients.clear()
+
+            st.success("更新しました")
+            st.session_state.page = "my_recipes"
+            st.rerun()
 
 if st.session_state.page == "dashboard":
     show_dashboard()
