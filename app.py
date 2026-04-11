@@ -925,6 +925,203 @@ def copy_meal_from_history(source_meal_id, target_date, target_meal_type):
     return True
 
 # =========================
+# マイレシピ読み込み
+# =========================
+@st.cache_data
+def load_my_recipe_log():
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_log")
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
+
+@st.cache_data
+def load_my_recipe_ingredients():
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_ingredients")
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
+
+def get_next_my_recipe_id():
+    logs = load_my_recipe_log().copy()
+
+    if logs.empty or "id" not in logs.columns:
+        return 1
+
+    ids = pd.to_numeric(logs["id"], errors="coerce").dropna()
+    if ids.empty:
+        return 1
+
+    return int(ids.max()) + 1
+
+def save_my_recipe_log(recipe, servings, nut):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_log")
+
+    new_id = get_next_my_recipe_id()
+
+    # meal_logと同じ構成に合わせる
+    sheet.append_row([
+        new_id,
+        "",   # date
+        "",   # meal_type
+        recipe,
+        servings,
+        nut["kcal"],
+        nut["protein"],
+        nut["fat"],
+        nut["carb"],
+        nut["calcium"],
+        nut["iron"],
+        nut["vitA"],
+        nut["vitE"],
+        nut["vitB1"],
+        nut["vitB2"],
+        nut["vitC"],
+        nut["fiber"],
+        nut["salt"]
+    ])
+
+    return new_id
+
+def save_my_recipe_ingredients(recipe_id, ingredients):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_ingredients")
+
+    rows = []
+    for ing in ingredients:
+        rows.append([
+            recipe_id,
+            ing["food"],
+            ing["gram"]
+        ])
+
+    if rows:
+        sheet.append_rows(rows)
+
+def get_my_recipe_log_by_id(recipe_id):
+    logs = load_my_recipe_log()
+    row_df = logs[logs["id"].astype(str) == str(recipe_id)]
+
+    if row_df.empty:
+        return None
+
+    return row_df.iloc[0].to_dict()
+
+def get_my_recipe_ingredients_by_id(recipe_id):
+    df = load_my_recipe_ingredients()
+    rows = df[df["meal_id"].astype(str) == str(recipe_id)]
+
+    ingredients = []
+    for _, r in rows.iterrows():
+        ingredients.append({
+            "uid": str(uuid.uuid4()),
+            "food": r["food"],
+            "gram": safe_float(r["gram"])
+        })
+    return ingredients
+
+def replace_my_recipe_ingredients(recipe_id, ingredients):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_ingredients")
+
+    data = sheet.get_all_values()
+    header = data[0]
+    rows = data[1:]
+
+    new_rows = []
+    for row in rows:
+        if str(row[0]) != str(recipe_id):
+            new_rows.append(row)
+
+    for ing in ingredients:
+        new_rows.append([
+            str(recipe_id),
+            ing["food"],
+            ing["gram"]
+        ])
+
+    sheet.clear()
+    sheet.append_row(header)
+    if new_rows:
+        sheet.append_rows(new_rows)
+
+def update_my_recipe_log_full(recipe_id, recipe, servings, nut):
+    client = connect_gsheet()
+    sheet = client.open("food_mapping").worksheet("my_recipe_log")
+
+    data = sheet.get_all_values()
+
+    for i, row in enumerate(data):
+        if str(row[0]) == str(recipe_id):
+            values = [[
+                recipe,
+                servings,
+                nut["kcal"],
+                nut["protein"],
+                nut["fat"],
+                nut["carb"],
+                nut["calcium"],
+                nut["iron"],
+                nut["vitA"],
+                nut["vitE"],
+                nut["vitB1"],
+                nut["vitB2"],
+                nut["vitC"],
+                nut["fiber"],
+                nut["salt"]
+            ]]
+            sheet.update(f"D{i+1}:R{i+1}", values)
+            break
+
+def save_my_recipe(recipe_title, servings, ingredients):
+    nutrition_dict = load_nutrition()
+    total_nut = calc_nutrition(ingredients, nutrition_dict)
+    per_person_nut = divide_nutrition(total_nut, servings)
+
+    recipe_id = save_my_recipe_log(recipe_title, servings, per_person_nut)
+    save_my_recipe_ingredients(recipe_id, ingredients)
+
+    load_my_recipe_log.clear()
+    load_my_recipe_ingredients.clear()
+    return recipe_id
+
+def copy_my_recipe_to_meal(source_recipe_id, target_date, target_meal_type):
+    source_log = get_my_recipe_log_by_id(source_recipe_id)
+    if source_log is None:
+        return False
+
+    source_ingredients = get_my_recipe_ingredients_by_id(source_recipe_id)
+
+    ingredients_to_save = []
+    for ing in source_ingredients:
+        ingredients_to_save.append({
+            "food": ing["food"],
+            "gram": safe_float(ing["gram"])
+        })
+
+    nutrition_dict = load_nutrition()
+    total_nut = calc_nutrition(ingredients_to_save, nutrition_dict)
+
+    servings = safe_float(source_log.get("servings", 1)) or 1
+    per_person_nut = divide_nutrition(total_nut, servings)
+
+    new_meal_id = save_meal_log_full(
+        target_date,
+        target_meal_type,
+        source_log["recipe"],
+        servings=servings,
+        nut=per_person_nut
+    )
+
+    save_ingredients(new_meal_id, ingredients_to_save)
+
+    load_meal_log.clear()
+    load_meal_ingredients.clear()
+    return True
+
+# =========================
 # 画面管理（遷移）
 # =========================
 
@@ -941,7 +1138,10 @@ if "recipe_edit_index" not in st.session_state:
     st.session_state.recipe_edit_index = None
 
 if "recipe_edit_detail" not in st.session_state:
-    st.session_state.recipe_edit_detail = None    
+    st.session_state.recipe_edit_detail = None  
+
+if "my_recipe_edit_id" not in st.session_state:
+    st.session_state.my_recipe_edit_id = None
 
 def format_meal_header_date(date_value):
     if date_value is None:
@@ -983,6 +1183,7 @@ def clear_meal_add_temp_states(clear_recipe_page=False, clear_my_item_edit=False
             "recipes_current_page",
             "recipe_edit_index",
             "recipe_edit_detail",
+            "my_recipe_edit_id",
         ]:
             if k in st.session_state:
                 del st.session_state[k]
@@ -2575,16 +2776,21 @@ def show_meal_add():
             st.session_state.page = "dashboard"
             st.rerun()
 
-    col_a, col_b = st.columns(2)
+    col_a, col_b, col_c = st.columns(3)
 
     with col_a:
-        if st.button("レシピサイトを検索"):
+        if st.button("レシピサイトを検索", use_container_width=True):
             st.session_state.page = "recipe_search"
             st.rerun()
 
     with col_b:
-        if st.button("⭐マイアイテム"):
+        if st.button("⭐マイアイテム", use_container_width=True):
             st.session_state.page = "my_items"
+            st.rerun()
+
+    with col_c:
+        if st.button("📚 マイレシピ", use_container_width=True):
+            st.session_state.page = "my_recipes"
             st.rerun()
 
 
@@ -4163,7 +4369,7 @@ def show_recipe_edit():
     # =========================
     # 下部ボタン
     # =========================
-    col_save1, col_save2 = st.columns(2)
+    col_save1, col_save2,col_save3 = st.columns(3)
 
     with col_save1:
         if st.button("← レシピ一覧へ戻る", use_container_width=True, key=f"edit_back_{url}"):
@@ -4225,6 +4431,56 @@ def show_recipe_edit():
             st.session_state.recipe_edit_detail = None
             st.session_state.page = "recipe_search"
             st.rerun()
+
+    with col_save3:
+         if st.button("📌 マイレシピに追加", use_container_width=True, key=f"edit_save2_{url}"):
+            meal = st.session_state.meal_type
+            date = st.session_state.selected_date
+
+            ingredients_for_save = []
+
+            for uid, item in st.session_state.selected_foods.get(url, {}).items():
+                gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+
+                if safe_float(gram) > 0:
+                    ingredients_for_save.append({
+                        "food": item["selected_food"],
+                        "gram": gram
+                    })
+
+            total_nut = calc_nutrition(
+                ingredients_for_save,
+                nutrition_dict
+            )
+
+            per_person_nut = divide_nutrition(total_nut, servings_selected)
+
+            save_my_recipe(
+                recipe_title=title,
+                servings=servings,
+                ingredients=ingredients_for_save
+            )
+
+
+            load_meal_log.clear()
+            load_meal_ingredients.clear()
+
+            items_to_save = []
+            for uid, item in st.session_state.selected_foods.get(url, {}).items():
+                gram = st.session_state.get(f"{url}_{uid}_gram", 0)
+                if safe_float(gram) > 0:
+                    items_to_save.append((
+                        item["original_name"],
+                        item["selected_food"]
+                    ))
+
+            save_all_to_gsheet(items_to_save)
+
+            st.success("保存しました")
+
+            st.session_state.recipe_edit_detail = None
+            st.session_state.page = "recipe_search"
+            st.rerun()       
 
 # =========================
 # meal を丸ごと削除する関数
@@ -4838,7 +5094,146 @@ def show_my_item_form():
             st.session_state.page = "my_items"
             st.rerun()
 
+def show_my_recipes():
+    render_meal_fixed_header(
+        back_page="meal_add",
+        clear_on_back=False,
+        sublabel="保存したレシピを追加・編集"
+    )
 
+    st.subheader("マイレシピ")
+
+    logs = load_my_recipe_log().copy()
+
+    if logs.empty:
+        st.info("マイレシピはまだありません")
+        return
+
+    logs["recipe"] = logs["recipe"].fillna("")
+    keyword = st.text_input("キーワードで絞り込み", "")
+
+    if keyword.strip():
+        logs = logs[logs["recipe"].str.contains(keyword, case=False, na=False)]
+
+    for _, row in logs.iterrows():
+        recipe_id = row["id"]
+        recipe_name = row["recipe"]
+        servings = safe_float(row.get("servings", 1)) or 1
+        kcal = safe_float(row.get("kcal", 0))
+
+        st.markdown(
+            f"""
+            <div style="
+                background:#fffaf7;
+                border:1px solid #f0e4db;
+                border-radius:16px;
+                padding:12px 14px;
+                margin-bottom:8px;
+            ">
+                <div style="font-weight:700;">{recipe_name}</div>
+                <div style="color:#8a7b71;font-size:0.92rem;">
+                    {servings:.0f}人分 / {kcal:.0f} kcal
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("食事に追加", key=f"add_my_recipe_{recipe_id}", use_container_width=True):
+                ok = copy_my_recipe_to_meal(
+                    source_recipe_id=recipe_id,
+                    target_date=st.session_state.selected_date,
+                    target_meal_type=st.session_state.meal_type
+                )
+                if ok:
+                    st.success("食事に追加しました")
+                    st.session_state.page = "meal_add"
+                    st.rerun()
+
+        with col2:
+            if st.button("編集", key=f"edit_my_recipe_{recipe_id}", use_container_width=True):
+                st.session_state.my_recipe_edit_id = str(recipe_id)
+                st.session_state.page = "my_recipe_edit"
+                st.rerun()
+
+
+def show_my_recipe_edit():
+    render_meal_fixed_header(
+        back_page="my_recipes",
+        clear_on_back=False,
+        sublabel="マイレシピを編集"
+    )
+
+    recipe_id = st.session_state.get("my_recipe_edit_id")
+    if not recipe_id:
+        st.warning("編集中のマイレシピがありません")
+        return
+
+    log = get_my_recipe_log_by_id(recipe_id)
+    ingredients = get_my_recipe_ingredients_by_id(recipe_id)
+
+    if log is None:
+        st.error("マイレシピが見つかりません")
+        return
+
+    nutrition_dict = load_nutrition()
+
+    recipe_name = st.text_input("レシピ名", value=log.get("recipe", ""), key=f"my_recipe_name_{recipe_id}")
+    servings = st.number_input(
+        "何人分",
+        min_value=1.0,
+        value=safe_float(log.get("servings", 1)) or 1.0,
+        step=1.0,
+        key=f"my_recipe_servings_{recipe_id}"
+    )
+
+    edited_ingredients = []
+
+    for i, ing in enumerate(ingredients):
+        col1, col2 = st.columns([6, 3])
+
+        current_food = ing["food"]
+        candidates = [current_food] + [f for f in food_master if f != current_food]
+
+        with col1:
+            selected_food = st.selectbox(
+                f"食材 {i+1}",
+                options=candidates,
+                index=0,
+                format_func=format_food_label,
+                key=f"my_recipe_food_{recipe_id}_{i}"
+            )
+
+        with col2:
+            gram = st.number_input(
+                f"g {i+1}",
+                min_value=0.0,
+                value=safe_float(ing["gram"]),
+                step=1.0,
+                key=f"my_recipe_gram_{recipe_id}_{i}"
+            )
+
+        edited_ingredients.append({
+            "food": selected_food,
+            "gram": gram
+        })
+
+    if st.button("保存", use_container_width=True, key=f"save_my_recipe_edit_{recipe_id}"):
+        total_nut = calc_nutrition(edited_ingredients, nutrition_dict)
+        per_person_nut = divide_nutrition(total_nut, servings)
+
+        update_my_recipe_log_full(recipe_id, recipe_name, servings, per_person_nut)
+        replace_my_recipe_ingredients(recipe_id, edited_ingredients)
+
+        load_my_recipe_log.clear()
+        load_my_recipe_ingredients.clear()
+
+        st.success("更新しました")
+        st.session_state.page = "my_recipes"
+        st.rerun()
 
 if st.session_state.page == "dashboard":
     show_dashboard()
@@ -4868,6 +5263,12 @@ elif st.session_state.page == "recipe_search":
     show_recipe_search()
 elif st.session_state.page == "recipe_edit":
     show_recipe_edit()
+
+elif st.session_state.page == "my_recipes":
+    show_my_recipes()
+
+elif st.session_state.page == "my_recipe_edit":
+    show_my_recipe_edit()
 
 
 
