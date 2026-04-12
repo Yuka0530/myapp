@@ -2436,7 +2436,7 @@ def show_meal_add():
                         "detail": detail
                     })
 
-                    st.session_state.selected_foods_temp.append(item)
+                    #st.session_state.selected_foods_temp.append(item)
                     st.session_state.remaining_words.remove(word)
 
                     if len(st.session_state.remaining_words) == 0:
@@ -2492,7 +2492,15 @@ def show_meal_add():
             # デリッシュ候補
             # -------------------------
             elif item["type"] == "recipe":
-                detail = item["detail"]
+                if "detail" not in item or not item["detail"]:
+                    detail = get_delish_recipe_detail(item["url"])
+                    item["detail"] = detail
+                    item["title"] = detail["title"]
+                    item["kcal"] = safe_float(detail["nutrients"]["kcal"])
+                    item["url"] = detail["url"]
+                else:
+                    detail = item["detail"]
+                
                 title = detail["title"]
                 url = detail["url"]
                 servings = detail["servings"]
@@ -2521,10 +2529,7 @@ def show_meal_add():
                         ing_name = ing["name"]
                         ing_amount = ing["amount"]
 
-                        # recipe_search と同じように無視対象は最初から入れない
-                        if is_ignored_ingredient(ing_name) or is_ignored_amount(ing_amount):
-                            st.caption("この材料は無視対象です")
-                            continue
+
 
                         st.session_state[state_key].append({
                             "uid": str(uuid.uuid4()),
@@ -2539,15 +2544,7 @@ def show_meal_add():
                 with st.expander("材料と分量を確認・編集", expanded=True):
                     rows = st.session_state[state_key]
 
-                    # 追加ボタン
-                    if st.button("＋材料を追加", key=f"{recipe_key}_add_row"):
-                        rows.append({
-                            "uid": str(uuid.uuid4()),
-                            "name": "",
-                            "amount": "",
-                            "is_manual": True
-                        })
-                        st.rerun()
+
 
                     selected_ingredients = []
                     mapping_items_to_save = []
@@ -2560,6 +2557,11 @@ def show_meal_add():
 
                         st.divider()
 
+                        # recipe_search と同じように無視対象は最初から入れない
+                        if is_ignored_ingredient(ing_name) or is_ignored_amount(ing_amount):
+                            st.caption(f"{ing_name} {ing_amount}は無視対象です")
+                            continue
+
                         col_title, col_del = st.columns([6, 1])
 
                         with col_title:
@@ -2567,11 +2569,6 @@ def show_meal_add():
                                 "材料名",
                                 value=ing_name,
                                 key=f"{recipe_key}_name_{uid}"
-                            )
-                            edited_amount = st.text_input(
-                                "元の表記",
-                                value=ing_amount,
-                                key=f"{recipe_key}_amount_{uid}"
                             )
 
                         with col_del:
@@ -2582,15 +2579,15 @@ def show_meal_add():
 
                         # 今回入力された値を state に戻す
                         ing["name"] = edited_name
-                        ing["amount"] = edited_amount
+                        #ing["amount"] = edited_amount
 
                         # 空行はまだ候補計算しない
                         if not edited_name.strip():
                             continue
 
                         # 編集後に ignore 対象になったものも無視
-                        if is_ignored_ingredient(edited_name) or is_ignored_amount(edited_amount):
-                            st.caption("この材料は無視対象です")
+                        if is_ignored_ingredient(edited_name) or is_ignored_amount(ing_amount):
+                            st.caption(f"{ing_name}は無視対象です")
                             continue
 
                         # 候補
@@ -2652,7 +2649,7 @@ def show_meal_add():
                                 st.warning("手動検索候補が見つかりません")
 
                         default_g = parse_amount(
-                            edited_amount,
+                            ing_amount,
                             food_name=selected_food,
                             nutrition_dict=nutrition_dict
                         )
@@ -2665,18 +2662,21 @@ def show_meal_add():
                             format="%d",
                             key=f"{recipe_key}_gram_{uid}"
                         )
+                        st.caption(f"📖元の表記: {ing_amount}")
 
                         nut = nutrition_dict.get(selected_food, {})
                         kcal = safe_float(nut.get("エネルギー", 0)) * gram / 100
 
                         st.markdown(
-                            f'<div class="ing-kcal">約 {kcal:.1f} kcal</div>',
+                            f'<div class="ing-kcal">👉約 {kcal:.1f} kcal</div>',
                             unsafe_allow_html=True
                         )
 
                         selected_ingredients.append({
                             "food": selected_food,
-                            "gram": gram
+                            "gram": gram,
+                            "original_name": ing_name,
+                            "original_amount": ing_amount
                         })
 
                         mapping_items_to_save.append((
@@ -2692,15 +2692,25 @@ def show_meal_add():
                         ]
                         st.rerun()
 
+                    # 追加ボタン
+                    if st.button("＋材料を追加", key=f"{recipe_key}_add_row"):
+                        rows.append({
+                            "uid": str(uuid.uuid4()),
+                            "name": "",
+                            "amount": "",
+                            "is_manual": True
+                        })
+                        st.rerun()
+
                     preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
                     per_person_preview = divide_nutrition(preview_nut, original_servings)
 
                     multiplier = st.number_input(
                         "登録倍率",
-                        min_value=1,
-                        value=1,
-                        step=1,
-                        format="%d",
+                        min_value=0.25,
+                        value=1.00,
+                        step=0.25,
+                        format="%.2f",
                         key=f"{recipe_key}_multiplier"
                     )
 
@@ -2708,14 +2718,22 @@ def show_meal_add():
                         k: v * multiplier for k, v in per_person_preview.items()
                     }
 
-                    st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
-                    st.write(f"登録される 1人分: {registered_per_person_nut['kcal']:.1f} kcal")
+                    st.write(
+                        f"合計 {preview_nut['kcal']:.1f} kcal（{servings}人分）"
+                        f" 👉 一人当たり {per_person_preview['kcal']:.1f} kcal"
+                    )
+                    #st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
+                    st.write(f"登録される 1人分(一人当たり×登録倍率): {registered_per_person_nut['kcal']:.1f} kcal")
 
                     scaled_ingredients = []
                     for ing_item in selected_ingredients:
                         scaled_ingredients.append({
                             "food": ing_item["food"],
-                            "gram": ing_item["gram"] * multiplier
+                            "gram": ing_item["gram"] * multiplier,
+                            "original_name": ing_item.get("original_name", ing_item.get("name", "")),
+                            "original_amount": ing_item.get("original_amount", ing_item.get("amount", "")),
+                            "source_url": url,
+                            "original_servings": original_servings
                         })
 
                     save_queue.append({
