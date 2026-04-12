@@ -2045,8 +2045,8 @@ def search_delish_recipes(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     q = requests.utils.quote(query)
     url = f"https://delishkitchen.tv/search?q={q}"
-    st.write(query)
-    st.write(url)
+    #st.write(query)
+    #st.write(url)
 
     res = requests.get(url, headers=headers, timeout=10)
     res.raise_for_status()
@@ -2057,7 +2057,8 @@ def search_delish_recipes(query):
     seen = set()
 
     for a in soup.select("a[href*='/recipes/']"):
-        st.write(a)
+
+        #st.write(a)
         href = a.get("href", "")
         if not href or "/recipes/" not in href:
             continue
@@ -2117,14 +2118,14 @@ def get_delish_recipe_detail(url):
 
         if name == "カロリー":
             nutrients["kcal"] = value
-        elif name == "たんぱく質":
-            nutrients["protein"] = value
-        elif name == "脂質":
-            nutrients["fat"] = value
-        elif name == "炭水化物":
-            nutrients["carb"] = value
-        elif name == "塩分":
-            nutrients["salt"] = value
+        # elif name == "たんぱく質":
+        #     nutrients["protein"] = value
+        # elif name == "脂質":
+        #     nutrients["fat"] = value
+        # elif name == "炭水化物":
+        #     nutrients["carb"] = value
+        # elif name == "塩分":
+        #     nutrients["salt"] = value
 
     # 人数
     servings = 1
@@ -2158,6 +2159,58 @@ def get_delish_recipe_detail(url):
         "nutrients": nutrients
     }
 
+@st.cache_data(show_spinner=False)
+def get_delish_recipe_summary(url):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=10)
+    res.raise_for_status()
+
+    soup = BeautifulSoup(res.text, "html.parser")
+
+    # タイトル（get_delish_recipe_detail と同じ）
+    title = ""
+    title_el = soup.select_one("span.title") or soup.select_one("h1")
+    if title_el:
+        title = title_el.get_text(strip=True)
+
+    # 栄養（get_delish_recipe_detail と同じ）
+    nutrients = {
+        "kcal": 0,
+        "protein": 0,
+        "fat": 0,
+        "carb": 0,
+        "salt": 0
+    }
+
+    for li in soup.select("ul.recipe-nutrients li.recipe-nutrient"):
+        name_el = li.select_one(".nutrient-name p")
+        amount_el = li.select_one(".nutrient-amount p")
+        if not name_el or not amount_el:
+            continue
+
+        name = name_el.get_text(strip=True)
+        amount_text = amount_el.get_text(strip=True)
+
+        num_match = re.search(r"(\d+(?:\.\d+)?)", amount_text)
+        value = float(num_match.group(1)) if num_match else 0
+
+        if name == "カロリー":
+            nutrients["kcal"] = value
+        # elif name == "たんぱく質":
+        #     nutrients["protein"] = value
+        # elif name == "脂質":
+        #     nutrients["fat"] = value
+        # elif name == "炭水化物":
+        #     nutrients["carb"] = value
+        # elif name == "塩分":
+        #     nutrients["salt"] = value
+
+    return {
+        "title": title,
+        "url": url,
+        "kcal": nutrients["kcal"]
+    }
+
 #nutrition候補 + デリッシュ候補をまとめて返す
 def search_foods_and_recipes(words):
     food_df = load_nutrition_df()
@@ -2184,13 +2237,12 @@ def search_foods_and_recipes(words):
             delish_hits = search_delish_recipes(w)
             for r in delish_hits:
                 try:
-                    detail = get_delish_recipe_detail(r["url"])
+                    summary = get_delish_recipe_summary(r["url"])
                     recipe_items.append({
                         "type": "recipe",
-                        "title": detail["title"],
-                        "kcal": detail["nutrients"]["kcal"],
-                        "url": detail["url"],
-                        "detail": detail
+                        "title": summary["title"],
+                        "kcal": summary["kcal"],
+                        "url": summary["url"]
                     })
                 except:
                     continue
@@ -2374,6 +2426,16 @@ def show_meal_add():
             elif item["type"] == "recipe":
                 label = f"【レシピ】{item['title']} {safe_float(item['kcal']):.0f} kcal/1人分"
                 if st.button(label, key=f"recipe_{word}_{i}"):
+                    detail = get_delish_recipe_detail(item["url"])
+
+                    st.session_state.selected_foods_temp.append({
+                        "type": "recipe",
+                        "title": detail["title"],
+                        "kcal": safe_float(detail["nutrients"]["kcal"]),
+                        "url": detail["url"],
+                        "detail": detail
+                    })
+
                     st.session_state.selected_foods_temp.append(item)
                     st.session_state.remaining_words.remove(word)
 
