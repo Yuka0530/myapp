@@ -339,6 +339,57 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.top-h
 </style>
 """, unsafe_allow_html=True)
 
+def render_fixed_kcal_bar(per_person_kcal, label="一人当たり"):
+    st.markdown(
+        f"""
+        <style>
+        .fixed-kcal-bar {{
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-top: 1px solid #e5e7eb;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+        }}
+
+        .fixed-kcal-bar-inner {{
+            max-width: 760px;
+            margin: 0 auto;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            color: #111827;
+        }}
+
+        .fixed-kcal-bar-sub {{
+            font-size: 13px;
+            font-weight: 500;
+            color: #6b7280;
+            margin-right: 8px;
+        }}
+
+        /* 下部固定バーに本文が隠れないように余白 */
+        .fixed-kcal-spacer {{
+            height: 80px;
+        }}
+        </style>
+
+        <div class="fixed-kcal-spacer"></div>
+
+        <div class="fixed-kcal-bar">
+            <div class="fixed-kcal-bar-inner">
+                <span class="fixed-kcal-bar-sub">{label}</span>
+                {per_person_kcal:.1f} kcal
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 # =========================
@@ -4143,12 +4194,12 @@ def show_recipe_edit():
             if ing["is_manual"]:
                 st.write(f"### {ing['name']}（追加）" if ing["name"] else "### 追加材料")
             else:
-                st.write(f"### {ing['name']}")
+                st.write(f"#### {ing['name']}")
 
         with col_delete:
             st.write("")
             st.write("")
-            if st.button("削除", key=f"delete_edit_ing_{url}_{ing['uid']}"):
+            if st.button("🚮", key=f"delete_edit_ing_{url}_{ing['uid']}"):
                 st.session_state.recipe_delete_target = {
                     "url": url,
                     "uid": ing["uid"]
@@ -4330,7 +4381,8 @@ def show_recipe_edit():
     per_person_fiber = fiber / servings_selected if servings_selected else 0
     per_person_salt = salt / servings_selected if servings_selected else 0
 
-    st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
+    render_fixed_kcal_bar(per_person_kcal, label="一人当たり")
+    #st.subheader(f"🍽 1人分カロリー: {per_person_kcal:.1f} kcal")
 
     # recipe_search 側で使っていた current_page 情報も更新
     if "recipes_current_page" not in st.session_state:
@@ -4419,7 +4471,11 @@ def show_recipe_edit():
                 if safe_float(gram) > 0:
                     ingredients_for_save.append({
                         "food": item["selected_food"],
-                        "gram": gram
+                        "gram": safe_float(gram),
+                        "original_name": item.get("original_name", item.get("name", "")),
+                        "original_amount": item.get("original_amount", item.get("amount", "")),
+                        "source_url": detail.get("url", ""),
+                        "original_servings": detail.get("servings", "")
                     })
 
             total_nut = calc_nutrition(
@@ -4689,22 +4745,27 @@ def show_saved_meal_edit():
         source_url_top = st.session_state[edit_key][0].get("source_url", "")
 
     if source_url_top:
-        st.caption("元レシピ")
-        st.markdown(f"[元レシピを開く]({source_url_top})")
+        st.markdown(f"[元レシピ]({source_url_top})")
 
-    servings = st.number_input(
-        "人数",
-        min_value=1,
-        step=1,
-        value=int(float(row["servings"])) if str(row["servings"]).strip() else 1
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        servings = st.number_input(
+            "人数",
+            min_value=1,
+            step=1,
+            value=int(float(row["servings"])) if str(row["servings"]).strip() else 1
+        )
+    with col2:
+        st.write("")
+        st.write("")
+        original_servings_top = ""
+        if st.session_state[edit_key]:
+            original_servings_top = st.session_state[edit_key][0].get("original_servings", "")
 
-    original_servings_top = ""
-    if st.session_state[edit_key]:
-        original_servings_top = st.session_state[edit_key][0].get("original_servings", "")
+        if original_servings_top:
+            st.caption(f"元の人数: {original_servings_top}")
 
-    if original_servings_top:
-        st.caption(f"元の人数: {original_servings_top}")
+
 
     delete_key = f"delete_target_{meal_id}"
 
@@ -4740,7 +4801,15 @@ def show_saved_meal_edit():
         original_servings = ing.get("original_servings", "")
         
         st.divider()
-        #st.write(f"元の材料名: {original_name}") if original_name else st.write("元の材料名: なし")
+        col_title, col_delete = st.columns([5, 1])
+        with col_title:
+            st.write(f"#### {original_name}")
+
+        with col_delete:
+            st.write("")
+            if st.button("🚮", key=f"delete_ing_{meal_id}_{uid}"):
+                st.session_state[delete_key] = uid
+                st.rerun()
 
 
         # 検索ワード入力
@@ -4752,9 +4821,6 @@ def show_saved_meal_edit():
             value=default_search,
             key=search_key
         )
-
-        if original_name:
-            st.caption(f"もとの材料名: {original_name}")
 
         # nutrition_dictから候補検索
         if search_word.strip():
@@ -4786,7 +4852,7 @@ def show_saved_meal_edit():
                 key=f"saved_edit_food_{meal_id}_{uid}"
             )
 
-        col1, col2 = st.columns([4, 1])
+        col1, col2 = st.columns([4, 1], gap="small")
 
         with col1:
             gram = st.number_input(
@@ -4796,14 +4862,16 @@ def show_saved_meal_edit():
                 value=int(ing["gram"]),
                 key=f"saved_edit_gram_{meal_id}_{uid}"
             )
-        st.write(f"元の分量: {original_amount}")
+        st.caption(f"📖レシピ分量: {original_amount}")
+
 
         with col2:
             st.write("")
             st.write("")
-            if st.button("削除", key=f"delete_ing_{meal_id}_{uid}"):
-                st.session_state[delete_key] = uid
-                st.rerun()
+
+        item_kcal = calc_ingredient_kcal(selected_food, gram, nutrition_dict)
+        st.write(f"👉{item_kcal:.1f} kcal")
+
 
         edited_ingredients.append({
             "uid": uid,
@@ -4816,11 +4884,7 @@ def show_saved_meal_edit():
         })
 
 
-        item_kcal = calc_ingredient_kcal(selected_food, gram, nutrition_dict)
-        st.markdown(
-            f'<div class="ing-kcal">{gram:.1f} g で {item_kcal:.1f} kcal</div>',
-            unsafe_allow_html=True
-        )
+
 
     if len(st.session_state[edit_key]) == 0:
         st.info("材料がありません。材料を追加してください。")
@@ -4845,7 +4909,8 @@ def show_saved_meal_edit():
     preview_total_nut = calc_nutrition(edited_ingredients, nutrition_dict)
     preview_per_person = divide_nutrition(preview_total_nut, servings)
 
-    st.subheader(f"1人分 {preview_per_person['kcal']:.1f} kcal")
+    #st.subheader(f"1人分 {preview_per_person['kcal']:.1f} kcal")
+    render_fixed_kcal_bar(int(preview_per_person['kcal']), label="一人当たり")
 
     col1, col2 = st.columns(2)
 
@@ -5260,6 +5325,7 @@ def show_my_recipe_edit():
         return
 
     nutrition_dict = load_nutrition()
+    nutrition_df = load_nutrition_df()
     food_master = list(nutrition_dict.keys())
 
     edit_key = f"my_recipe_edit_ingredients_{recipe_id}"
@@ -5267,12 +5333,28 @@ def show_my_recipe_edit():
         st.session_state[edit_key] = get_my_recipe_ingredients_by_id(recipe_id)
 
     recipe_name = st.text_input("料理名", value=log["recipe"])
+
+    source_url_top = ""
+    if st.session_state[edit_key]:
+        source_url_top = st.session_state[edit_key][0].get("source_url", "")
+
+    if source_url_top:
+        
+        st.markdown(f"[元レシピ]({source_url_top})")
+
     servings = st.number_input(
         "人数",
         min_value=1,
         step=1,
         value=int(float(log["servings"])) if str(log["servings"]).strip() else 1
     )
+
+    original_servings_top = ""
+    if st.session_state[edit_key]:
+        original_servings_top = st.session_state[edit_key][0].get("original_servings", "")
+
+    if original_servings_top:
+        st.caption(f"元の人数: {original_servings_top}")
 
     delete_key = f"my_recipe_delete_target_{recipe_id}"
     if delete_key not in st.session_state:
@@ -5291,7 +5373,7 @@ def show_my_recipe_edit():
 
     for i, ing in enumerate(st.session_state[edit_key]):
         st.divider()
-        st.write(f"材料 {i+1}")
+        
 
         current_food = ing["food"]
         uid = ing["uid"]
@@ -5301,18 +5383,17 @@ def show_my_recipe_edit():
         source_url = ing.get("source_url", "")
         original_servings = ing.get("original_servings", "")
 
-        if original_name or original_amount or original_servings:
-            ref_lines = []
-            if original_name:
-                ref_lines.append(f"元の材料名: {original_name}")
-            if original_amount:
-                ref_lines.append(f"元の分量: {original_amount}")
-            if original_servings:
-                ref_lines.append(f"元の人数: {original_servings}")
-            st.caption(" / ".join(ref_lines))
+        col_title, col_delete = st.columns([5, 1])
+        with col_title:
+            
+            st.write(f"#### {original_name}")
 
-        if source_url:
-            st.markdown(f"[元レシピを開く]({source_url})")
+        with col_delete:
+            st.write("")
+            if st.button("🚮", key=f"my_recipe_edit_delete_{recipe_id}_{uid}"):
+                st.session_state[delete_key] = uid
+                st.rerun()
+
 
         search_key = f"my_recipe_edit_search_{recipe_id}_{uid}"
         default_search = st.session_state.get(search_key, current_food)
@@ -5347,23 +5428,31 @@ def show_my_recipe_edit():
             key=f"my_recipe_edit_food_{recipe_id}_{uid}"
         )
 
-        gram = st.number_input(
-            f"グラム {i+1}",
-            min_value=0.0,
-            value=safe_float(ing["gram"]),
-            step=1.0,
-            key=f"my_recipe_edit_gram_{recipe_id}_{uid}"
-        )
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            gram = st.number_input(
+                f"グラム {i+1}",
+                min_value=0.0,
+                value=safe_float(ing["gram"]),
+                step=1.0,
+                key=f"my_recipe_edit_gram_{recipe_id}_{uid}"
+            )
+
+
+
+        with col2:
+            st.write("")
+            st.write("")
+
+        if original_amount:
+            st.caption(f"元の分量: {original_amount}")
+
+
 
         item_kcal = calc_ingredient_kcal(selected_food, gram, nutrition_dict)
-        st.markdown(
-            f'<div class="ing-kcal">{gram:.1f} g で {item_kcal:.1f} kcal</div>',
-            unsafe_allow_html=True
-        )
-
-        if st.button("🗑", key=f"my_recipe_edit_delete_{recipe_id}_{uid}"):
-            st.session_state[delete_key] = uid
-            st.rerun()
+        st.write(f"👉{item_kcal:.1f} kcal")
+        
 
         edited_ingredients.append({
             "food": selected_food,
@@ -5373,6 +5462,29 @@ def show_my_recipe_edit():
             "source_url": source_url,
             "original_servings": original_servings
         })
+
+    def calc_per_person_kcal(ingredients, nutrition_df, servings=1):
+        total_kcal = 0.0
+
+        for ing in ingredients:
+            food = ing.get("food", "")
+            gram = safe_float(ing.get("gram", 0))
+
+            if not food or gram <= 0:
+                continue
+
+            row = nutrition_df[nutrition_df["食材"] == food]
+            if row.empty:
+                continue
+
+            kcal_per_100g = safe_float(row.iloc[0].get("エネルギー", 0))
+            total_kcal += gram / 100 * kcal_per_100g
+
+        servings = safe_float(servings)
+        if servings <= 0:
+            servings = 1
+
+        return total_kcal / servings
 
     if st.button("＋材料を追加", key=f"my_recipe_add_row_{recipe_id}"):
         st.session_state[edit_key].append({
@@ -5385,6 +5497,9 @@ def show_my_recipe_edit():
             "original_servings": ""
         })
         st.rerun()
+
+    per_person_kcal = calc_per_person_kcal(st.session_state[edit_key], nutrition_df, servings)
+    render_fixed_kcal_bar(per_person_kcal, label="一人当たり")
 
     col1, col2 = st.columns(2)
 
