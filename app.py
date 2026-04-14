@@ -5237,12 +5237,13 @@ def update_my_item(original_name, item_data):
 
     for i, row in enumerate(data[1:], start=2):
         if len(row) > 0 and row[0] == original_name:
-            new_row = []
-            for col in headers:
-                new_row.append(item_data.get(col, 0))
+            new_row = [item_data.get(col, 0) for col in headers]
 
-            cell_range = f"A{i}:{chr(64+len(headers))}{i}"
-            sheet.update(cell_range, [new_row])
+            # A1表記を自前で組まず、左上セル指定で更新
+            sheet.update(
+                values=[new_row],
+                range_name=f"A{i}"
+            )
 
             load_nutrition.clear()
             load_nutrition_df.clear()
