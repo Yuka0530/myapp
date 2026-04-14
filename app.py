@@ -336,6 +336,53 @@ div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"]:has(.top-h
     line-height: 1.1;
 }
 
+/* anchor の次にある button ブロックを狙う */
+div[data-testid="stVerticalBlock"] div[data-testid="stElementContainer"]:has(.advice-btn-area) + div[data-testid="stElementContainer"] div.stButton > button {
+    background: linear-gradient(135deg, #f7b267 0%, #f79d65 100%) !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 800 !important;
+    font-size: 1.02rem !important;
+    min-height: 54px !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 20px rgba(247, 157, 101, 0.28) !important;
+}
+
+div[data-testid="stVerticalBlock"] div[data-testid="stElementContainer"]:has(.advice-btn-area) + div[data-testid="stElementContainer"] div.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(247, 157, 101, 0.34) !important;
+    filter: brightness(1.02);
+    color: white !important;
+}            
+
+div[data-testid="stVerticalBlock"] div[data-testid="stElementContainer"]:has(.search-like-btn-area) + div[data-testid="stElementContainer"] div.stButton > button {
+    width: 100% !important;
+    min-height: 56px !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(120, 120, 120, 0.14) !important;
+    background: rgba(160, 160, 160, 0.14) !important;
+    color: #6b625c !important;
+    font-weight: 500 !important;
+    font-size: 1rem !important;
+    text-align: left !important;
+    padding: 0.9rem 1rem !important;
+    box-shadow: none !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+div[data-testid="stVerticalBlock"] div[data-testid="stElementContainer"]:has(.search-like-btn-area) + div[data-testid="stElementContainer"] div.stButton > button:hover {
+    background: rgba(150, 150, 150, 0.20) !important;
+    border: 1px solid rgba(120, 120, 120, 0.20) !important;
+    color: #5b514b !important;
+    transform: none !important;
+}
+
+div[data-testid="stVerticalBlock"] div[data-testid="stElementContainer"]:has(.search-like-btn-area) + div[data-testid="stElementContainer"] div.stButton > button::before {
+    content: "🔍 ";
+    opacity: 0.7;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1242,6 +1289,7 @@ def clear_meal_add_temp_states(clear_recipe_page=False, clear_my_item_edit=False
         "history_filter_mode",
         "meal_add_recipe_selected_foods",
         "state_key",
+        "search_step"
     ]:
         if k in st.session_state:
             del st.session_state[k]
@@ -1438,7 +1486,15 @@ def show_dashboard():
 
     st.divider()
 
-    if st.button("📊アドバイス"):
+    with st.container():
+        st.markdown('<div class="advice-btn-area"></div>', unsafe_allow_html=True)
+        advice_clicked = st.button(
+            "📊 1日/1週間/1か月平均の栄養グラフ",
+            key="advice_button",
+            use_container_width=True
+        )
+
+    if advice_clicked:
         st.session_state.graph_target = "daily"
         st.session_state.page = "nutrition_graph"
         st.rerun()
@@ -1553,6 +1609,84 @@ def show_dashboard():
 # 栄養グラフ画面
 # =========================
 def show_nutrition_graph():
+    def get_completed_days_only(logs_df):
+        df = logs_df.copy()
+
+        if df.empty:
+            return df
+
+        required_meals = {"朝食", "昼食", "夕食"}
+
+        meal_sets = (
+            df.groupby("date")["meal_type"]
+            .apply(lambda s: set(s.dropna().astype(str)))
+        )
+
+        valid_dates = meal_sets[meal_sets.apply(lambda s: required_meals.issubset(s))].index.tolist()
+        #st.write(f"3食すべて登録がある日: {(valid_dates)}日")
+        return df[df["date"].isin(valid_dates)].copy()
+
+
+    def get_period_average_logs(logs, selected_date, period="weekly"):
+        df = logs.copy()
+
+        numeric_cols = [
+            "kcal", "protein", "fat", "carb", "calcium", "iron",
+            "vitA", "vitE", "vitB1", "vitB2", "vitC", "fiber", "salt"
+        ]
+
+        if df.empty:
+            return df, 0, None, None, pd.DataFrame()
+
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"]).copy()
+
+        selected_ts = pd.Timestamp(selected_date)
+
+        if period == "weekly":
+            start_date = selected_ts - pd.Timedelta(days=6)
+            end_date = selected_ts
+        elif period == "monthly":
+            start_date = selected_ts - pd.Timedelta(days=29)
+            end_date = selected_ts
+        else:
+            start_date = selected_ts
+            end_date = selected_ts
+
+        df = df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
+
+        # 朝昼夕の3食すべてある日のみ
+        required_meals = {"朝食", "昼食", "夕食"}
+        meal_sets = df.groupby("date")["meal_type"].apply(lambda s: set(s.dropna().astype(str)))
+        valid_dates = meal_sets[meal_sets.apply(lambda s: required_meals.issubset(s))].index.tolist()
+        df = df[df["date"].isin(valid_dates)].copy()
+
+        if df.empty:
+            return df, 0, start_date, end_date, pd.DataFrame()
+
+        daily_sum = (
+            df.groupby("date")[numeric_cols]
+            .sum(numeric_only=True)
+            .reset_index()
+            .sort_values("date")
+        )
+
+        valid_day_count = len(daily_sum)
+
+        avg_row = daily_sum[numeric_cols].mean(numeric_only=True).to_dict()
+        avg_df = pd.DataFrame([avg_row])
+        avg_df["date"] = selected_ts
+        avg_df["meal_type"] = "平均"
+        avg_df["recipe"] = "平均"
+
+        for col in logs.columns:
+            if col not in avg_df.columns:
+                avg_df[col] = ""
+
+        avg_df = avg_df[logs.columns.tolist()]
+
+        return avg_df, valid_day_count, start_date, end_date, daily_sum
+
     logs = load_meal_log().copy()
 
     numeric_cols = [
@@ -1566,9 +1700,27 @@ def show_nutrition_graph():
         else:
             logs[c] = 0
 
-    today = logs[logs["date"] == str(st.session_state.selected_date)].copy()
+    selected_date = st.session_state.get("selected_date", pd.Timestamp.today())
     graph_target = st.session_state.get("graph_target", "daily")
 
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+
+    # 上部の切替ボタン
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("一日", use_container_width=True, key="graph_tab_daily"):
+            st.session_state.graph_target = "daily"
+            st.rerun()
+    with col2:
+        if st.button("一週間", use_container_width=True, key="graph_tab_weekly"):
+            st.session_state.graph_target = "weekly"
+            st.rerun()
+    with col3:
+        if st.button("一か月", use_container_width=True, key="graph_tab_monthly"):
+            st.session_state.graph_target = "monthly"
+            st.rerun()
+    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+    
     full_target = {
         "kcal": 1600,
         "protein": 60,
@@ -1621,6 +1773,10 @@ def show_nutrition_graph():
             return f"{intake:.1f} / {base:.1f}"
         return f"{round(intake):.0f} / {round(base):.0f}"
 
+    today = logs[logs["date"] == str(selected_date)].copy()
+    valid_day_count = None
+    daily_sum_ref = pd.DataFrame()
+
     if graph_target == "meal_type":
         meal_type = st.session_state.get("meal_type", "朝食")
         today = today[today["meal_type"] == meal_type].copy()
@@ -1634,18 +1790,49 @@ def show_nutrition_graph():
         meal_ratio = ratio_map.get(meal_type, 0.35)
         target = {k: v * meal_ratio for k, v in full_target.items()}
 
-        st.title(f"{meal_type} の栄養グラフ")
+        st.title(f"{meal_type} ")
         st.caption(f"基準値は1日分の {meal_ratio*100:.0f}%")
         group_col = "recipe"
         legend_title = "レシピ"
+
+    elif graph_target == "weekly":
+        today, valid_day_count, start_date, end_date, daily_sum_ref = get_period_average_logs(
+            logs, selected_date, period="weekly"
+        )
+        target = full_target
+        st.title("1週間平均")
+        st.caption(
+            f"対象：{start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')} まで "
+            f"（朝食・昼食・夕食の3食すべて登録がある日 {valid_day_count}日）"
+        )
+        group_col = "meal_type"
+        legend_title = "区分"
+
+    elif graph_target == "monthly":
+        today, valid_day_count, start_date, end_date, daily_sum_ref = get_period_average_logs(
+            logs, selected_date, period="monthly"
+        )
+        target = full_target
+        st.title("1か月平均")
+        st.caption(
+            f"対象：{start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')} まで "
+            f"（朝食・昼食・夕食の3食すべて登録がある日 {valid_day_count}日）"
+        )
+        group_col = "meal_type"
+        legend_title = "区分"
+
     else:
         target = full_target
-        st.title("1日分の栄養グラフ")
+        st.title("1日分")
         group_col = "meal_type"
         legend_title = "食事区分"
 
     if today.empty:
-        st.info("この日の記録がありません")
+        if graph_target in ["weekly", "monthly"]:
+            st.info("対象期間内に、朝食・昼食・夕食の3食すべて登録がある日がありません")
+        else:
+            st.info("この日の記録がありません")
+
         if st.button("←戻る"):
             st.session_state.page = "dashboard"
             st.rerun()
@@ -1653,44 +1840,58 @@ def show_nutrition_graph():
 
     today[group_col] = today[group_col].fillna("").replace("", "未分類")
 
-    if group_col == "meal_type":
-        desired_order = ["朝食", "昼食", "夕食", "間食"]
-        group_names = [g for g in desired_order if g in today[group_col].unique().tolist()]
-        others = [g for g in today[group_col].unique().tolist() if g not in desired_order]
-        group_names += others
-    else:
-        group_names = today[group_col].drop_duplicates().tolist()
+    if graph_target in ["weekly", "monthly"]:
+        group_names = ["平均"]
+        grouped = today.groupby(group_col)[numeric_cols].sum(numeric_only=True)
+        totals = today[numeric_cols].sum()
 
-    grouped = today.groupby(group_col)[numeric_cols].sum(numeric_only=True)
-    totals = today[numeric_cols].sum()
-
-    ratio_df = pd.DataFrame(0.0, index=group_names, columns=nutrient_order)
-
-    for group_name in group_names:
-        if group_name not in grouped.index:
-            continue
+        ratio_df = pd.DataFrame(0.0, index=group_names, columns=nutrient_order)
         for nut in nutrient_order:
-            intake = float(grouped.loc[group_name, nut])
+            intake = float(totals.get(nut, 0))
             base = float(target.get(nut, 0))
-            ratio_df.loc[group_name, nut] = intake / base * 100 if base > 0 else 0
+            ratio_df.loc["平均", nut] = intake / base * 100 if base > 0 else 0
 
-    if group_col == "meal_type":
-        color_map = {
-            "朝食": "#f6bd60",
-            "昼食": "#84a59d",
-            "夕食": "#f28482",
-            "間食": "#cdb4db",
-            "未分類": "#bdbdbd",
-        }
+        color_map = {"平均": "#84a59d"}
+
     else:
-        recipe_palette = [
-            "#f6bd60", "#84a59d", "#f28482", "#cdb4db", "#90dbf4",
-            "#a7c957", "#ffafcc", "#bde0fe", "#ffd6a5", "#b8c0ff"
-        ]
-        color_map = {
-            name: recipe_palette[i % len(recipe_palette)]
-            for i, name in enumerate(group_names)
-        }
+        if group_col == "meal_type":
+            desired_order = ["朝食", "昼食", "夕食", "間食"]
+            group_names = [g for g in desired_order if g in today[group_col].unique().tolist()]
+            others = [g for g in today[group_col].unique().tolist() if g not in desired_order]
+            group_names += others
+        else:
+            group_names = today[group_col].drop_duplicates().tolist()
+
+        grouped = today.groupby(group_col)[numeric_cols].sum(numeric_only=True)
+        totals = today[numeric_cols].sum()
+
+        ratio_df = pd.DataFrame(0.0, index=group_names, columns=nutrient_order)
+
+        for group_name in group_names:
+            if group_name not in grouped.index:
+                continue
+            for nut in nutrient_order:
+                intake = float(grouped.loc[group_name, nut])
+                base = float(target.get(nut, 0))
+                ratio_df.loc[group_name, nut] = intake / base * 100 if base > 0 else 0
+
+        if group_col == "meal_type":
+            color_map = {
+                "朝食": "#f6bd60",
+                "昼食": "#84a59d",
+                "夕食": "#f28482",
+                "間食": "#cdb4db",
+                "未分類": "#bdbdbd",
+            }
+        else:
+            recipe_palette = [
+                "#f6bd60", "#84a59d", "#f28482", "#cdb4db", "#90dbf4",
+                "#a7c957", "#ffafcc", "#bde0fe", "#ffd6a5", "#b8c0ff"
+            ]
+            color_map = {
+                name: recipe_palette[i % len(recipe_palette)]
+                for i, name in enumerate(group_names)
+            }
 
     status_bg_map = {
         "不足": "#dceeff",
@@ -1850,6 +2051,44 @@ def show_nutrition_graph():
         use_container_width=True,
         config={"responsive": True}
     )
+
+    if graph_target in ["weekly", "monthly"] and not daily_sum_ref.empty:
+        st.markdown("##### 参考：平均計算に使った日別合計")
+
+        display_df = daily_sum_ref.copy()
+        display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
+
+        rename_map = {
+            "date": "日付",
+            "kcal": "kcal",
+            "protein": "たんぱく質",
+            "fat": "脂質",
+            "carb": "炭水化物",
+            "fiber": "食物繊維",
+            "salt": "塩分",
+            "calcium": "カルシウム",
+            "iron": "鉄",
+            "vitA": "ビタミンA",
+            "vitE": "ビタミンE",
+            "vitB1": "ビタミンB1",
+            "vitB2": "ビタミンB2",
+            "vitC": "ビタミンC",
+        }
+
+        display_df = display_df.rename(columns=rename_map)
+
+        for col in display_df.columns:
+            if col != "日付":
+                display_df[col] = pd.to_numeric(display_df[col], errors="coerce").round(1)
+
+        col_order = [
+            "日付", "kcal", "たんぱく質", "脂質", "炭水化物",
+            "食物繊維", "塩分", "カルシウム", "鉄",
+            "ビタミンA", "ビタミンE", "ビタミンB1", "ビタミンB2", "ビタミンC"
+        ]
+        display_df = display_df[[c for c in col_order if c in display_df.columns]]
+
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     if st.button("←戻る"):
         st.session_state.page = "dashboard"
@@ -2357,18 +2596,226 @@ def show_meal_add():
     # 1検索バー
     # =========================
 
-    if st.session_state.search_step == 0:
-    
-        if st.button("🔍 食材検索を開始"):
-            st.session_state.search_step = 1
+    #if st.session_state.search_step == 0:
+    st.markdown('<div class="search-like-btn-area"></div>', unsafe_allow_html=True)
+    food_search_clicked = st.button(
+        "食材・レシピ名を入力して検索する",
+        key="start_food_search",
+        use_container_width=True
+    )
+
+
+    if food_search_clicked:
+        st.session_state.page = "food_search"
+        st.session_state.search_step = 1
+        st.rerun()
+
+    # if st.button("🔍 食材検索を開始"):
+    #     st.session_state.page = "food_search"
+    #     st.session_state.search_step = 1
+    #     st.rerun()
+
+
+
+
+    col_a, col_b, col_c = st.columns(3,gap="xxsmall")
+
+    with col_a:
+        if st.button("レシピサイトを検索", use_container_width=True):
+            st.session_state.page = "recipe_search"
             st.rerun()
 
-    #2検索ワード入力
-    elif st.session_state.search_step == 1:
+    with col_b:
+        if st.button("⭐マイアイテム", use_container_width=True):
+            st.session_state.page = "my_items"
+            st.rerun()
+
+    with col_c:
+        if st.button("📚 マイレシピ", use_container_width=True):
+            st.session_state.page = "my_recipes"
+            st.rerun()
+
+
+    #履歴表示
+    st.divider()
+
+    st.subheader("📚登録履歴から追加")
+
+    col_hist1, col_hist2 = st.columns(2)
+
+    with col_hist1:
+        if st.button(f"{st.session_state.meal_type}の履歴", use_container_width=True):
+            st.session_state.history_filter_mode = "meal_type"
+            st.rerun()
+
+    with col_hist2:
+        if st.button("すべての履歴", use_container_width=True):
+            st.session_state.history_filter_mode = "all"
+            st.rerun()
+
+    logs = load_meal_log().copy()
+
+    # 数値列を安全変換
+    if "kcal" in logs.columns:
+        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
+    else:
+        logs["kcal_num"] = 0
+
+    # フィルター
+    if st.session_state.history_filter_mode == "meal_type":
+        history_rows = logs[
+            logs["meal_type"] == st.session_state.meal_type
+        ].copy()
+    else:
+        history_rows = logs.copy()
+
+    # 新しい順に並べる
+    if "id" in history_rows.columns:
+        history_rows["id_num"] = pd.to_numeric(history_rows["id"], errors="coerce").fillna(0)
+        history_rows = history_rows.sort_values("id_num", ascending=False)
+
+    # 同じ recipe が何回も並びすぎるのが嫌なら recipe単位で最新1件だけにする
+    history_rows = history_rows.drop_duplicates(subset=["recipe"], keep="first")
+
+    if history_rows.empty:
+        st.info("履歴がありません")
+    else:
+        for _, r in history_rows.iterrows():
+            col1, col2, col3 = st.columns([4, 2, 1])
+
+            with col1:
+                st.write(f"**{r['recipe']}**")
+                if st.session_state.history_filter_mode == "all":
+                    st.caption(f"{r['meal_type']} / {r['date']}")
+
+            with col2:
+                st.write(f"{safe_float(r['kcal_num']):.0f} kcal")
+
+            with col3:
+                if st.button("＋", key=f"add_history_{r['id']}"):
+                    ok = copy_meal_from_history(
+                        source_meal_id=r["id"],
+                        target_date=st.session_state.selected_date,
+                        target_meal_type=st.session_state.meal_type
+                    )
+
+                    if ok:
+                        st.success("登録しました")
+                        st.rerun()
+                    else:
+                        st.error("履歴の登録に失敗しました")
+
+
+    if st.button("←戻る"):
     
+        st.session_state.search_step = 0
+        st.session_state.search_results = {}
+        st.session_state.selected_foods_temp = []
+    
+        st.session_state.page = "dashboard"
+        st.rerun()
+
+
+    logs = load_meal_log()
+    target_rows = logs[
+        (logs["date"] == str(st.session_state.selected_date)) &
+        (logs["meal_type"] == st.session_state.meal_type)
+    ]
+
+    total_kcal = pd.to_numeric(target_rows["kcal"], errors="coerce").fillna(0).sum()
+    total_count = len(target_rows)
+
+    bottom_bar = st.container()
+
+    st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
+
+    with bottom_bar:
+        st.markdown('<div class="bottom-bar-anchor"></div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([2, 5], vertical_alignment="center")
+
+        with col1:
+            st.markdown(f"""
+            <div class="bottom-bar-kcal">
+                <div class="soft-caption">現在の合計</div>
+                <div style="font-size:1.5rem;font-weight:700;">{total_kcal:.0f} kcal</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            if st.button(
+                f"登録を確認 ({total_count})",
+                use_container_width=True,
+                key="go_saved_confirm"
+            ):
+                st.session_state.page = "saved_meal_confirm"
+                st.rerun()
+
+def show_food_search():
+    mapping = load_mapping()
+
+    render_meal_fixed_header(
+        back_page="meal_add",
+        clear_on_back=False,
+        sublabel="食材検索"
+    )
+    
+
+    def save_multiple_to_mapping(items_to_save):
+        if not items_to_save:
+            return
+
+        client = connect_gsheet()
+        sheet = client.open("food_mapping").sheet1
+
+        all_data = sheet.get_all_values()
+        rows_to_append = []
+
+        for original, selected in items_to_save:
+            found = False
+
+            for i, row in enumerate(all_data[1:], start=2):
+                if len(row) >= 2 and row[0] == original and row[1] == selected:
+                    count = int(row[2]) if len(row) > 2 and row[2] else 0
+                    sheet.update_cell(i, 3, count + 1)
+                    found = True
+                    break
+
+            if not found:
+                rows_to_append.append([original, selected, 1])
+
+        if rows_to_append:
+            sheet.append_rows(rows_to_append)
+
+        load_mapping.clear()
+
+    if "search_step" not in st.session_state:
+        st.session_state.search_step = 1
+
+    if "search_words" not in st.session_state:
+        st.session_state.search_words = []
+
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = {}
+
+    if "remaining_words" not in st.session_state:
+        st.session_state.remaining_words = []
+
+    if "selected_foods_temp" not in st.session_state:
+        st.session_state.selected_foods_temp = []
+
+    if "history_filter_mode" not in st.session_state:
+        st.session_state.history_filter_mode = "meal_type"
+
+    if "meal_add_recipe_selected_foods" not in st.session_state:
+        st.session_state.meal_add_recipe_selected_foods = {}
+
+    # ①検索ワード入力
+
+    if st.session_state.search_step == 1:
         st.subheader("検索ワード入力")
-    
+
         words = []
+
     
         for i in range(10):
             w = st.text_input(f"検索{i+1}", key=f"word_{i}")
@@ -2508,7 +2955,7 @@ def show_meal_add():
                 original_servings = detail["servings"]
 
                 st.write(f"**{title}**")
-                st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal")
+                st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal（{safe_float(detail['servings']):.0f}人分）")
                 st.markdown(f"[レシピを開く]({url})")
 
                 recipe_key = f"meal_add_recipe_{i}"
@@ -2725,6 +3172,7 @@ def show_meal_add():
                     #st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
                     st.write(f"登録される 1人分(一人当たり×登録倍率): {registered_per_person_nut['kcal']:.1f} kcal")
 
+                    render_fixed_kcal_bar(int(per_person_preview['kcal']), label="一人当たり")
                     scaled_ingredients = []
                     for ing_item in selected_ingredients:
                         scaled_ingredients.append({
@@ -2742,139 +3190,7 @@ def show_meal_add():
                         "ingredients": scaled_ingredients,
                         "servings": original_servings,
                         "mapping_items": mapping_items_to_save
-                    })            
-            # elif item["type"] == "recipe":
-            #     detail = item["detail"]
-            #     title = detail["title"]
-            #     url = detail["url"]
-            #     servings = detail["servings"]
-            #     raw_ingredients = detail["ingredients"]
-
-            #     st.write(f"**{title}**")
-            #     st.caption(f"デリッシュキッチン: 1人分 {safe_float(detail['nutrients']['kcal']):.1f} kcal")
-            #     st.markdown(f"[レシピを開く]({url})")
-
-            #     recipe_key = f"meal_add_recipe_{i}"
-
-            #     with st.expander("材料と分量を確認・編集", expanded=True):
-            #         selected_ingredients = []
-            #         mapping_items_to_save = []
-
-            #         for j, ing in enumerate(raw_ingredients):
-            #             ing_name = ing["name"]
-            #             ing_amount = ing["amount"]
-
-            #             st.markdown(f"### {ing_name}")
-            #             st.caption(f"元の表記: {ing_amount}")
-
-            #             # =========================
-            #             # 自動検索候補
-            #             # =========================
-            #             candidates = [
-            #                 food for food in food_master
-            #                 if normalize(ing_name) in normalize(food)
-            #             ]
-
-            #             # mapping履歴があるなら必ず追加
-            #             if ing_name in mapping:
-            #                 for saved_food in mapping[ing_name].keys():
-            #                     if saved_food not in candidates:
-            #                         candidates.append(saved_food)
-
-            #             candidates = get_sorted_candidates(
-            #                 ing_name,
-            #                 candidates,
-            #                 mapping
-            #             )
-
-            #             if not candidates:
-            #                 candidates = food_master[:30]
-            #             else:
-            #                 candidates = candidates[:50]
-
-            #             selected_food = st.selectbox(
-            #                 "自動検索",
-            #                 candidates,
-            #                 format_func=format_food_label,
-            #                 key=f"{recipe_key}_food_{j}"
-            #             )
-
-            #             # =========================
-            #             # 手動検索
-            #             # =========================
-            #             manual_search = st.text_input(
-            #                 "手動検索",
-            #                 key=f"{recipe_key}_search_{j}"
-            #             )
-
-            #             if manual_search.strip():
-            #                 manual_candidates = [
-            #                     food for food in food_master
-            #                     if normalize(manual_search) in normalize(food)
-            #                 ]
-
-            #                 # 手動検索候補にも現在選択中のものを残す
-            #                 if selected_food not in manual_candidates and selected_food in food_master:
-            #                     manual_candidates = [selected_food] + manual_candidates
-
-            #                 manual_candidates = manual_candidates[:50]
-
-            #                 if manual_candidates:
-            #                     selected_food = st.selectbox(
-            #                         "手動検索候補",
-            #                         manual_candidates,
-            #                         format_func=format_food_label,
-            #                         key=f"{recipe_key}_manual_food_{j}"
-            #                     )
-            #                 else:
-            #                     st.warning("手動検索候補が見つかりません")
-
-            #             default_g = parse_amount(
-            #                 ing_amount,
-            #                 food_name=selected_food,
-            #                 nutrition_dict=nutrition_dict
-            #             )
-
-            #             # 10g単位に寄せる
-            #             default_g_rounded = int(round(float(default_g) / 10) * 10) if float(default_g) > 0 else 0
-
-            #             gram = st.number_input(
-            #                 "分量（g）",
-            #                 value=default_g_rounded,
-            #                 step=10,
-            #                 key=f"{recipe_key}_gram_{j}"
-            #             )
-
-            #             nut = nutrition_dict.get(selected_food, {})
-            #             kcal = safe_float(nut.get("エネルギー", 0)) * gram / 100
-
-            #             st.markdown(
-            #                 f'<div class="ing-kcal">約 {kcal:.1f} kcal</div>',
-            #                 unsafe_allow_html=True
-            #             )
-
-            #             selected_ingredients.append({
-            #                 "food": selected_food,
-            #                 "gram": gram
-            #             })
-
-            #             mapping_items_to_save.append((
-            #                 ing_name,
-            #                 selected_food
-            #             ))
-
-            #         preview_nut = calc_nutrition(selected_ingredients, nutrition_dict)
-            #         per_person_preview = divide_nutrition(preview_nut, servings)
-
-            #         st.write(f"推定 1人分: {per_person_preview['kcal']:.1f} kcal")
-
-            #         save_queue.append({
-            #             "type": "recipe",
-            #             "title": title,
-            #             "ingredients": selected_ingredients,
-            #             "servings": servings,
-            #             "mapping_items": mapping_items_to_save
-            #         })
+                    })       
 
         def append_meal_log_with_id(meal_id, date, meal_type, recipe, servings, nut):
             client = connect_gsheet()
@@ -2935,140 +3251,6 @@ def show_meal_add():
             clear_meal_add_temp_states(clear_recipe_page=True, clear_my_item_edit=True)
             st.session_state.page = "dashboard"
             st.rerun()
-
-    col_a, col_b, col_c = st.columns(3)
-
-    with col_a:
-        if st.button("レシピサイトを検索", use_container_width=True):
-            st.session_state.page = "recipe_search"
-            st.rerun()
-
-    with col_b:
-        if st.button("⭐マイアイテム", use_container_width=True):
-            st.session_state.page = "my_items"
-            st.rerun()
-
-    with col_c:
-        if st.button("📚 マイレシピ", use_container_width=True):
-            st.session_state.page = "my_recipes"
-            st.rerun()
-
-
-    #履歴表示
-    st.divider()
-
-    st.subheader("📚登録履歴から追加")
-
-    col_hist1, col_hist2 = st.columns(2)
-
-    with col_hist1:
-        if st.button(f"{st.session_state.meal_type}の履歴", use_container_width=True):
-            st.session_state.history_filter_mode = "meal_type"
-            st.rerun()
-
-    with col_hist2:
-        if st.button("すべての履歴", use_container_width=True):
-            st.session_state.history_filter_mode = "all"
-            st.rerun()
-
-    logs = load_meal_log().copy()
-
-    # 数値列を安全変換
-    if "kcal" in logs.columns:
-        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
-    else:
-        logs["kcal_num"] = 0
-
-    # フィルター
-    if st.session_state.history_filter_mode == "meal_type":
-        history_rows = logs[
-            logs["meal_type"] == st.session_state.meal_type
-        ].copy()
-    else:
-        history_rows = logs.copy()
-
-    # 新しい順に並べる
-    if "id" in history_rows.columns:
-        history_rows["id_num"] = pd.to_numeric(history_rows["id"], errors="coerce").fillna(0)
-        history_rows = history_rows.sort_values("id_num", ascending=False)
-
-    # 同じ recipe が何回も並びすぎるのが嫌なら recipe単位で最新1件だけにする
-    history_rows = history_rows.drop_duplicates(subset=["recipe"], keep="first")
-
-    if history_rows.empty:
-        st.info("履歴がありません")
-    else:
-        for _, r in history_rows.iterrows():
-            col1, col2, col3 = st.columns([4, 2, 1])
-
-            with col1:
-                st.write(f"**{r['recipe']}**")
-                if st.session_state.history_filter_mode == "all":
-                    st.caption(f"{r['meal_type']} / {r['date']}")
-
-            with col2:
-                st.write(f"{safe_float(r['kcal_num']):.0f} kcal")
-
-            with col3:
-                if st.button("＋", key=f"add_history_{r['id']}"):
-                    ok = copy_meal_from_history(
-                        source_meal_id=r["id"],
-                        target_date=st.session_state.selected_date,
-                        target_meal_type=st.session_state.meal_type
-                    )
-
-                    if ok:
-                        st.success("登録しました")
-                        st.rerun()
-                    else:
-                        st.error("履歴の登録に失敗しました")
-
-
-    if st.button("←戻る"):
-    
-        st.session_state.search_step = 0
-        st.session_state.search_results = {}
-        st.session_state.selected_foods_temp = []
-    
-        st.session_state.page = "dashboard"
-        st.rerun()
-
-
-    logs = load_meal_log()
-    target_rows = logs[
-        (logs["date"] == str(st.session_state.selected_date)) &
-        (logs["meal_type"] == st.session_state.meal_type)
-    ]
-
-    total_kcal = pd.to_numeric(target_rows["kcal"], errors="coerce").fillna(0).sum()
-    total_count = len(target_rows)
-
-    bottom_bar = st.container()
-
-    st.markdown('<div class="bottom-spacer"></div>', unsafe_allow_html=True)
-
-    with bottom_bar:
-        st.markdown('<div class="bottom-bar-anchor"></div>', unsafe_allow_html=True)
-        col1, col2 = st.columns([2, 5], vertical_alignment="center")
-
-        with col1:
-            st.markdown(f"""
-            <div class="bottom-bar-kcal">
-                <div class="soft-caption">現在の合計</div>
-                <div style="font-size:1.5rem;font-weight:700;">{total_kcal:.0f} kcal</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            if st.button(
-                f"登録を確認 ({total_count})",
-                use_container_width=True,
-                key="go_saved_confirm"
-            ):
-                st.session_state.page = "saved_meal_confirm"
-                st.rerun()
-
-        
 
 # =========================
 # レシピ検索画面
@@ -5223,29 +5405,257 @@ def show_my_item_form():
         per_piece = per_100g * gram_per_piece / 100
         return str(per_piece)
 
+    def score_nutrition_text(text):
+        if not text:
+            return -999
+
+        score = 0
+        keywords = [
+            "栄養成分", "100g", "エネルギー", "たんぱく質",
+            "脂質", "炭水化物", "食物繊維", "食塩相当量", "kcal"
+        ]
+
+        for kw in keywords:
+            if kw in text:
+                score += 10
+
+        # 数字+g や kcal が多いほど加点
+        score += len(re.findall(r'\d+(?:\.\d+)?\s*g', text)) * 2
+        score += len(re.findall(r'\d+(?:\.\d+)?\s*k?cal', text, re.IGNORECASE)) * 3
+
+        # 変な記号だらけなら減点
+        score -= len(re.findall(r'[|`“”\'"=_*#^]', text))
+
+        return score
+
+    def extract_text_from_nutrition_image(uploaded_file):
+        try:
+            img = Image.open(uploaded_file).convert("RGB")
+            img_np = np.array(img)
+
+            # 元画像を少し内側に切る（アプリUIや余白を減らす）
+            h, w = img_np.shape[:2]
+            img_np = img_np[int(h * 0.12):int(h * 0.92), int(w * 0.05):int(w * 0.95)]
+
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+            # 軽く平滑化
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            # エッジ抽出
+            edges = cv2.Canny(blur, 50, 150)
+
+            # 輪郭検出
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            best_rect = None
+            best_area = 0
+
+            for cnt in contours:
+                peri = cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+
+                if len(approx) == 4:
+                    x, y, ww, hh = cv2.boundingRect(approx)
+                    area = ww * hh
+                    ratio = ww / max(hh, 1)
+
+                    # 大きめの四角で、横長すぎないものを優先
+                    if area > best_area and area > (img_np.shape[0] * img_np.shape[1] * 0.08) and 0.8 < ratio < 3.5:
+                        best_area = area
+                        best_rect = (x, y, ww, hh)
+
+            if best_rect is not None:
+                x, y, ww, hh = best_rect
+                pad = 8
+                x1 = max(0, x + pad)
+                y1 = max(0, y + pad)
+                x2 = min(img_np.shape[1], x + ww - pad)
+                y2 = min(img_np.shape[0], y + hh - pad)
+                crop = img_np[y1:y2, x1:x2]
+            else:
+                crop = img_np
+
+            # OCR用前処理
+            gray2 = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+            gray2 = cv2.resize(gray2, None, fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
+            gray2 = cv2.convertScaleAbs(gray2, alpha=1.4, beta=0)
+
+            _, th = cv2.threshold(gray2, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            # 表形式なので psm 6 が合いやすい
+            config = r'--oem 3 --psm 6'
+            text = pytesseract.image_to_string(th, lang="jpn", config=config)
+
+            return text
+
+        except Exception as e:
+            st.warning(f"OCRエラー: {e}")
+            return ""
+        
+    
+
+    def normalize_ocr_text(text):
+        text = str(text or "")
+        text = text.replace(" ", "").replace("　", "")
+        text = text.replace("O", "0").replace("o", "0")
+        text = text.replace("I", "1").replace("l", "1")
+        text = text.replace("／", "/").replace("，", ",").replace("．", ".")
+        text = text.replace("〜", "~").replace("～", "~")
+        text = text.replace("たん白質", "たんぱく質").replace("蛋白質", "たんぱく質")
+        text = text.replace("食塩相当", "食塩相当量")
+        text = text.replace("栄養成分表示:00g当たり", "栄養成分表示:100g当たり")
+        text = text.replace("栄養成分表示:oog当たり", "栄養成分表示:100g当たり")
+        text = text.replace("00g当たり", "100g当たり")
+        text = text.replace("oog当たり", "100g当たり")
+        text = text.replace("0Og当たり", "100g当たり")
+        return text
+
+    def extract_number_from_text(pattern, text, default=""):
+        m = re.search(pattern, text, re.IGNORECASE)
+        if not m:
+            return default
+        try:
+            return str(float(m.group(1)))
+        except:
+            return default
+
+    def parse_nutrition_ocr_text(text):
+        text = normalize_ocr_text(text)
+
+        result = {
+            "basis_type": "",   # per_piece / per_100g / per_serving
+            "basis_g": "",
+
+            "kcal": "",
+            "protein": "",
+            "fat": "",
+            "carb": "",
+            "fiber": "",
+            "salt": "",
+        }
+
+        # 基準量
+        m = re.search(r'100g(?:当たり|あたり)?', text)
+        if m:
+            result["basis_type"] = "per_100g"
+            result["basis_g"] = "100"
+
+        m = re.search(r'1個(?:当たり|あたり)?(?:\((\d+(?:\.\d+)?)g\))?', text)
+        if m:
+            result["basis_type"] = "per_piece"
+            if m.group(1):
+                result["basis_g"] = m.group(1)
+
+        m = re.search(r'1食(?:当たり|あたり)?(?:\((\d+(?:\.\d+)?)g\))?', text)
+        if m:
+            result["basis_type"] = "per_serving"
+            if m.group(1):
+                result["basis_g"] = m.group(1)
+
+        m = re.search(r'1袋(?:当たり|あたり)?(?:\((\d+(?:\.\d+)?)g\))?', text)
+        if m:
+            result["basis_type"] = "per_serving"
+            if m.group(1):
+                result["basis_g"] = m.group(1)
+
+        # 栄養素
+        result["kcal"] = extract_number_from_text(r'エネルギー[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*k?cal', text, "")
+        result["protein"] = extract_number_from_text(r'たんぱく質[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*g', text, "")
+        result["fat"] = extract_number_from_text(r'脂質[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*g', text, "")
+        result["carb"] = extract_number_from_text(r'炭水化物[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*g', text, "")
+        result["fiber"] = extract_number_from_text(r'食物繊維[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*g', text, "")
+        result["salt"] = extract_number_from_text(r'食塩相当量[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*g', text, "")
+
+        return result
+
+    # OCR保持
+    if "my_item_ocr_parsed" not in st.session_state:
+        st.session_state.my_item_ocr_parsed = {}
+    if "my_item_ocr_text" not in st.session_state:
+        st.session_state.my_item_ocr_text = ""
+
+    st.subheader("栄養成分表示の画像から自動入力")
+    uploaded_file = st.file_uploader(
+        "パッケージやHPの栄養成分表示画像",
+        type=["png", "jpg", "jpeg"],
+        key="my_item_nutrition_uploader"
+    )
+
+    if uploaded_file is not None:
+        st.image(uploaded_file, use_container_width=True)
+
+        if st.button("画像を解析", key="analyze_my_item_nutrition", use_container_width=True):
+            text = extract_text_from_nutrition_image(uploaded_file)
+            parsed = parse_nutrition_ocr_text(text)
+
+            st.session_state.my_item_ocr_text = text
+            st.session_state.my_item_ocr_parsed = parsed
+
+            st.success("解析しました。取得できた項目をフォームに反映します。")
+            st.rerun()
+
+    with st.expander("OCR結果を確認", expanded=False):
+        st.text(st.session_state.get("my_item_ocr_text", ""))
+
+    ocr = st.session_state.get("my_item_ocr_parsed", {})
+
+    def pick_value(ocr_key, edit_col=None, fallback=""):
+        ocr_v = ocr.get(ocr_key, "")
+        if str(ocr_v).strip() != "":
+            return str(ocr_v)
+
+        if edit_col is not None:
+            return get_default(edit_col, fallback)
+
+        return fallback
+
+
     food_name = st.text_input("メニュー名 *", value=get_default("食材", ""))
     unit_g = st.text_input("1個あたりの分量(g) *", value=get_default("1個(g)", ""))
 
-    st.caption("※ 栄養素はすべて 1個あたり で入力してください")
+    kcal_default = ""
+    protein_default = ""
+    fat_default = ""
+    carb_default = ""
+    fiber_default = ""
+    salt_default = ""
 
-    kcal = st.text_input("カロリー(kcal/1個) *", value=get_default_per_piece("エネルギー", ""))
-    protein = st.text_input("たんぱく質(g/1個)", value=get_default_per_piece("たんぱく質", ""))
-    fat = st.text_input("脂質(g/1個)", value=get_default_per_piece("脂質", ""))
-    carb = st.text_input("炭水化物(g/1個)", value=get_default_per_piece("炭水化物", ""))
-    calcium = st.text_input("カルシウム(mg/1個)", value=get_default_per_piece("カルシウム", ""))
-    iron = st.text_input("鉄(mg/1個)", value=get_default_per_piece("鉄", ""))
-    vitA = st.text_input("ビタミンA(μg/1個)", value=get_default_per_piece("ビタミンA", ""))
-    vitE = st.text_input("ビタミンE(mg/1個)", value=get_default_per_piece("ビタミンE", ""))
-    vitB1 = st.text_input("ビタミンB1(mg/1個)", value=get_default_per_piece("ビタミンB1", ""))
-    vitB2 = st.text_input("ビタミンB2(mg/1個)", value=get_default_per_piece("ビタミンB2", ""))
-    vitC = st.text_input("ビタミンC(mg/1個)", value=get_default_per_piece("ビタミンC", ""))
-    fiber = st.text_input("食物繊維(g/1個)", value=get_default_per_piece("食物繊維", ""))
-    salt = st.text_input("食塩相当量(g/1個)", value=get_default_per_piece("食塩相当量", ""))
+    if ocr.get("basis_type") == "per_100g":
+        kcal_default = ocr.get("kcal", "")
+        protein_default = ocr.get("protein", "")
+        fat_default = ocr.get("fat", "")
+        carb_default = ocr.get("carb", "")
+        fiber_default = ocr.get("fiber", "")
+        salt_default = ocr.get("salt", "")
+    elif ocr.get("basis_type") in ["per_piece", "per_serving"]:
+        kcal_default = ocr.get("kcal", "")
+        protein_default = ocr.get("protein", "")
+        fat_default = ocr.get("fat", "")
+        carb_default = ocr.get("carb", "")
+        fiber_default = ocr.get("fiber", "")
+        salt_default = ocr.get("salt", "")
+    else:
+        kcal_default = get_default_per_piece("エネルギー", "")
+        protein_default = get_default_per_piece("たんぱく質", "")
+        fat_default = get_default_per_piece("脂質", "")
+        carb_default = get_default_per_piece("炭水化物", "")
+        fiber_default = get_default_per_piece("食物繊維", "")
+        salt_default = get_default_per_piece("食塩相当量", "")
 
-    col1, col2 = st.columns(2)
+    st.caption("下の栄養素欄は共通です。『1個あたりで登録』か『100gあたりで登録』を選んで保存してください。")
+
+    kcal = st.text_input("カロリー *", value=str(kcal_default))
+    protein = st.text_input("たんぱく質", value=str(protein_default))
+    fat = st.text_input("脂質", value=str(fat_default))
+    carb = st.text_input("炭水化物", value=str(carb_default))
+    fiber = st.text_input("食物繊維", value=str(fiber_default))
+    salt = st.text_input("食塩相当量", value=str(salt_default))
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("保存", use_container_width=True):
+        if st.button("保存(1個当たり)", use_container_width=True):
             if not food_name.strip():
                 st.error("メニュー名は必須です")
                 return
@@ -5272,13 +5682,13 @@ def show_my_item_form():
                 "たんぱく質": per_piece_to_per_100g(protein),
                 "脂質": per_piece_to_per_100g(fat),
                 "炭水化物": per_piece_to_per_100g(carb),
-                "カルシウム": per_piece_to_per_100g(calcium),
-                "鉄": per_piece_to_per_100g(iron),
-                "ビタミンA": per_piece_to_per_100g(vitA),
-                "ビタミンE": per_piece_to_per_100g(vitE),
-                "ビタミンB1": per_piece_to_per_100g(vitB1),
-                "ビタミンB2": per_piece_to_per_100g(vitB2),
-                "ビタミンC": per_piece_to_per_100g(vitC),
+                # "カルシウム": per_piece_to_per_100g(calcium),
+                # "鉄": per_piece_to_per_100g(iron),
+                # "ビタミンA": per_piece_to_per_100g(vitA),
+                # "ビタミンE": per_piece_to_per_100g(vitE),
+                # "ビタミンB1": per_piece_to_per_100g(vitB1),
+                # "ビタミンB2": per_piece_to_per_100g(vitB2),
+                # "ビタミンC": per_piece_to_per_100g(vitC),
                 "食物繊維": per_piece_to_per_100g(fiber),
                 "食塩相当量": per_piece_to_per_100g(salt),
                 "1個(g)": gram_per_piece,
@@ -5305,9 +5715,72 @@ def show_my_item_form():
             st.session_state.page = "my_items"
             st.rerun()
 
-    with col2:
+    with col2: 
+        if st.button("保存(100g当たり)", use_container_width=True):
+            if not food_name.strip():
+                st.error("メニュー名は必須です")
+                return
+
+            if str(unit_g).strip() == "":
+                st.error("1個あたりの分量(g)は必須です")
+                return
+
+            gram_per_piece = safe_float(unit_g)
+            if gram_per_piece <= 0:
+                st.error("1個あたりの分量(g)は0より大きい値を入力してください")
+                return
+
+            if str(kcal).strip() == "":
+                st.error("1個あたりカロリーは必須です")
+                return
+
+            item_data = {
+                "食材": food_name.strip(),
+                "エネルギー": kcal,
+                "たんぱく質": protein,
+                "脂質": fat,
+                "炭水化物": carb,
+                # "カルシウム": per_piece_to_per_100g(calcium),
+                # "鉄": per_piece_to_per_100g(iron),
+                # "ビタミンA": per_piece_to_per_100g(vitA),
+                # "ビタミンE": per_piece_to_per_100g(vitE),
+                # "ビタミンB1": per_piece_to_per_100g(vitB1),
+                # "ビタミンB2": per_piece_to_per_100g(vitB2),
+                # "ビタミンC": per_piece_to_per_100g(vitC),
+                "食物繊維": (fiber),
+                "食塩相当量": (salt),
+                "1個(g)": gram_per_piece,
+                "source": "my_item"
+            }
+
+            if edit_name:
+                ok = update_my_item(edit_name, item_data)
+                if ok:
+                    st.success("更新しました")
+
+                else:
+                    st.error("更新対象が見つかりません")
+                    return
+            else:
+                existing = nutrition_df[nutrition_df["食材"] == food_name.strip()]
+                if not existing.empty:
+                    st.error("同じ名前の食材がすでにあります")
+                    return
+
+                save_my_item(item_data)
+                st.success("登録しました")
+
+            st.session_state.my_item_edit_name = None
+            st.session_state.ocr_text = ""
+            st.session_state.ocr_parsed = {}
+            st.session_state.page = "my_items"
+            st.rerun()        
+
+    with col3:
         if st.button("キャンセル", use_container_width=True):
             st.session_state.my_item_edit_name = None
+            st.session_state.ocr_text = ""
+            st.session_state.ocr_parsed = {}
             st.session_state.page = "my_items"
             st.rerun()
 
@@ -5642,6 +6115,9 @@ elif st.session_state.page == "my_recipes":
 
 elif st.session_state.page == "my_recipe_edit":
     show_my_recipe_edit()
+
+elif st.session_state.page == "food_search":
+    show_food_search()
 
 
 
