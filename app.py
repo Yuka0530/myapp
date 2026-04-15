@@ -1469,8 +1469,9 @@ def render_daily_kcal_progress(today_logs, target_kcal=1600):
 def show_dashboard():
 
 
-
-    st.title("食事記録")
+    st.write(""")""")
+    #st.title("食事記録")
+    st.image("title.png", width=300)
     st.caption("日付ごとの食事を記録して、1日分・食事別の栄養バランスを確認できます")
 
     if "selected_date" not in st.session_state:
@@ -1486,6 +1487,19 @@ def show_dashboard():
 
     st.divider()
 
+
+
+    logs = load_meal_log().copy()
+
+    if "kcal" in logs.columns:
+        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
+    else:
+        logs["kcal_num"] = 0
+
+    today = logs[logs["date"] == str(st.session_state.selected_date)]
+
+    render_daily_kcal_progress(today, target_kcal=1600)
+
     with st.container():
         st.markdown('<div class="advice-btn-area"></div>', unsafe_allow_html=True)
         advice_clicked = st.button(
@@ -1498,17 +1512,6 @@ def show_dashboard():
         st.session_state.graph_target = "daily"
         st.session_state.page = "nutrition_graph"
         st.rerun()
-
-    logs = load_meal_log().copy()
-
-    if "kcal" in logs.columns:
-        logs["kcal_num"] = pd.to_numeric(logs["kcal"], errors="coerce").fillna(0)
-    else:
-        logs["kcal_num"] = 0
-
-    today = logs[logs["date"] == str(st.session_state.selected_date)]
-
-    render_daily_kcal_progress(today, target_kcal=1600)
 
     meal_icons = {
         "朝食": "🌅",
@@ -1534,6 +1537,7 @@ def show_dashboard():
                     f'<div class="custom-meal-title">{icon} {meal}</div>',
                     unsafe_allow_html=True
                 )
+                #st.image("breakfast.png", width=100)
 
             with col2:
                 st.markdown(
